@@ -1,0 +1,17 @@
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.venv/
+venv/
+env/
+captures/
+build/
+dist/
+jarvis.db
+jarvis.log
+jarvis_web.log
+.pytest_cache/
+.mypy_cache/
+.git/
+.gitignore

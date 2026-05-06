@@ -1,0 +1,14 @@
+[
+  {
+    "role": "user",
+    "parts": [
+      "play music"
+    ]
+  },
+  {
+    "role": "model",
+    "parts": [
+      "I'm afraid I can't directly play music for you, sir. My apologies if that's a disappointment. I lack the necessary audio output capabilities for such a task. Is there something else I can assist you with?"
+    ]
+  }
+]

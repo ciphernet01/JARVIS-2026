@@ -1,0 +1,322 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>JARVIS // Security Protocol</title>
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      background: #020509;
+      color: #0ff;
+      font-family: 'Share Tech Mono', monospace;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+      position: relative;
+    }
+
+    body::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0, 255, 255, 0.03) 2px, rgba(0, 255, 255, 0.03) 4px);
+      pointer-events: none;
+      z-index: 10;
+    }
+
+    .login-container {
+      position: relative;
+      z-index: 20;
+      text-align: center;
+      padding: 40px;
+      border: 1px solid rgba(0, 255, 255, 0.2);
+      border-radius: 10px;
+      background: rgba(0, 10, 20, 0.6);
+      backdrop-filter: blur(10px);
+      box-shadow: 0 0 30px rgba(0, 255, 255, 0.1);
+      transition: all 1s ease;
+    }
+
+    .login-title {
+      font-family: 'Orbitron', sans-serif;
+      font-size: 2.5rem;
+      letter-spacing: 5px;
+      margin-bottom: 5px;
+      text-shadow: 0 0 10px rgba(0, 255, 255, 0.5);
+    }
+
+    .login-subtitle {
+      font-size: 0.9rem;
+      color: #5ab1b1;
+      letter-spacing: 2px;
+      margin-bottom: 40px;
+      text-transform: uppercase;
+    }
+
+    .scanner-box {
+      width: 200px;
+      height: 200px;
+      margin: 0 auto 30px;
+      position: relative;
+      border: 2px solid rgba(0, 255, 255, 0.3);
+      overflow: hidden;
+    }
+
+    .scanner-line {
+      position: absolute;
+      width: 100%;
+      height: 2px;
+      background: #0ff;
+      box-shadow: 0 0 10px #0ff, 0 0 20px #0ff;
+      animation: scan 2s linear infinite;
+    }
+
+    @keyframes scan {
+      0% { top: -5%; }
+      100% { top: 105%; }
+    }
+
+    .video-feed {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      opacity: 0.7;
+      filter: grayscale(1) contrast(1.2) brightness(1.2);
+    }
+
+    .scanner-overlay {
+      position: absolute;
+      inset: 0;
+      border: 1px solid rgba(0, 255, 255, 0.4);
+      box-shadow: inset 0 0 50px rgba(0, 255, 255, 0.2);
+      pointer-events: none;
+      z-index: 5;
+    }
+
+    .scanner-overlay::before {
+      content: '';
+      position: absolute;
+      top: 10px; left: 10px; width: 20px; height: 20px;
+      border-top: 2px solid #0ff; border-left: 2px solid #0ff;
+    }
+    .scanner-overlay::after {
+      content: '';
+      position: absolute;
+      bottom: 10px; right: 10px; width: 20px; height: 20px;
+      border-bottom: 2px solid #0ff; border-right: 2px solid #0ff;
+    }
+
+    .auth-flash {
+      position: absolute;
+      inset: 0;
+      background: #0ff;
+      opacity: 0;
+      z-index: 100;
+      pointer-events: none;
+    }
+    
+    .flash-active {
+      animation: flashAnim 0.3s ease-out;
+    }
+    
+    @keyframes flashAnim {
+      0% { opacity: 0.8; }
+      100% { opacity: 0; }
+    }
+
+    .btn-auth {
+      background: transparent;
+      border: 1px solid #0ff;
+      color: #0ff;
+      padding: 12px 30px;
+      font-family: 'Orbitron', sans-serif;
+      font-size: 1.1rem;
+      letter-spacing: 3px;
+      cursor: pointer;
+      text-transform: uppercase;
+      transition: all 0.3s;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .btn-auth:hover {
+      background: rgba(0, 255, 255, 0.1);
+      box-shadow: 0 0 15px rgba(0, 255, 255, 0.4);
+    }
+
+    .btn-auth:active {
+      transform: scale(0.98);
+    }
+
+    .status-text {
+      margin-top: 20px;
+      min-height: 20px;
+      font-size: 0.85rem;
+    }
+
+    /* Transition Animation Classes */
+    .access-granted {
+      animation: grantedGlow 1.5s forwards;
+    }
+    
+    .fade-out {
+      opacity: 0;
+      transform: scale(1.1);
+    }
+
+    @keyframes grantedGlow {
+      0% { border-color: rgba(0, 255, 255, 0.2); box-shadow: 0 0 30px rgba(0, 255, 255, 0.1); }
+      50% { border-color: #0f0; box-shadow: 0 0 50px rgba(0, 255, 0, 0.6); color: #0f0; }
+      100% { border-color: #0f0; box-shadow: 0 0 100px rgba(0, 255, 0, 0.8); color: #0f0; transform: scale(1.05); }
+    }
+
+    .access-granted .scanner-line {
+      background: #0f0;
+      box-shadow: 0 0 10px #0f0, 0 0 20px #0f0;
+      animation: none;
+      top: 50%;
+      height: 4px;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="login-container" id="login-box">
+    <div class="login-title">J.A.R.V.I.S</div>
+    <div class="login-subtitle">Neural Interface System Security</div>
+    
+    <div class="scanner-box" id="scanner">
+      <video id="video-feed" class="video-feed" autoplay playsinline muted></video>
+      <div class="scanner-overlay"></div>
+      <div class="scanner-line" id="scan-line" style="display: none;"></div>
+      <div class="auth-flash" id="flash"></div>
+    </div>
+    
+    <button class="btn-auth" id="btn-auth" onclick="startAuth()">Initialize Bio-Scan</button>
+    <div class="status-text" id="status">Awaiting input...</div>
+  </div>
+
+  <script>
+    // Prioritize British Male voice for JARVIS
+    function speak(text, callback=null) {
+      const utterance = new SpeechSynthesisUtterance(text);
+      utterance.rate = 0.95;
+      utterance.pitch = 0.9;
+      
+      const voices = window.speechSynthesis.getVoices();
+      const britishVoice = voices.find(v => v.name.includes('Google UK English Male')) || 
+                           voices.find(v => v.lang === 'en-GB' && v.name.includes('Male')) ||
+                           voices.find(v => v.lang === 'en-GB') ||
+                           voices[0];
+      if (britishVoice) utterance.voice = britishVoice;
+      
+      if (callback) utterance.onend = callback;
+      window.speechSynthesis.speak(utterance);
+    }
+
+    // Initialize Camera on Load
+    const video = document.getElementById('video-feed');
+    const flash = document.getElementById('flash');
+    const scanLine = document.getElementById('scan-line');
+    
+    async function initCamera() {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ video: { width: 400, height: 400 } });
+        video.srcObject = stream;
+        appendStatus("Neural Link Established. Camera Online.", "#0ff");
+      } catch (err) {
+        console.error("Camera access denied:", err);
+        appendStatus("BIOMETRIC CAPTURE OFFLINE. Permission denied.", "#f00");
+      }
+    }
+
+    function appendStatus(text, color) {
+      const el = document.getElementById('status');
+      el.style.color = color;
+      el.innerText = text;
+    }
+
+    async function startAuth() {
+      const btn = document.getElementById('btn-auth');
+      const status = document.getElementById('status');
+      
+      btn.style.display = 'none';
+      scanLine.style.display = 'block';
+      appendStatus('SCANNING BIOMETRICS...', '#0ff');
+      
+      // Voice interaction
+      speak("Facial scan sequence initiated. Please remain still.");
+
+      // Visual Flash effect
+      setTimeout(() => flash.classList.add('flash-active'), 500);
+      setTimeout(() => flash.classList.remove('flash-active'), 800);
+
+      try {
+        // Capture frame from video
+        const canvas = document.createElement('canvas');
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(video, 0, 0);
+        const imageData = canvas.toDataURL('image/jpeg', 0.8);
+
+        const response = await fetch('/api/verify_face', { 
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ image: imageData })
+        });
+        const data = await response.json();
+        
+        scanLine.style.display = 'none';
+        
+        if (data.success) {
+          // Store security token for the dashboard
+          localStorage.setItem('jarvis_token', data.token);
+          
+          status.style.color = '#0f0';
+          status.innerText = 'ACCESS GRANTED. DECRYPTING...';
+          document.getElementById('login-box').classList.add('access-granted');
+          
+          speak("Access granted. Welcome back, sir.", () => {
+            // Wait for voice to finish, plus extra 1.5s for the CSS animation
+            setTimeout(() => {
+              document.body.classList.add('fade-out');
+              setTimeout(() => {
+                window.location.href = '/dashboard';
+              }, 500);
+            }, 1500);
+          });
+          
+        } else {
+          status.style.color = '#f00';
+          status.innerText = 'ACCESS DENIED. ' + (data.message || 'Subject unrecognized.');
+          btn.style.display = 'inline-block';
+          btn.innerText = 'RETRY SCAN';
+          speak("Access denied. " + (data.message || "Unrecognized face detected."));
+        }
+      } catch (e) {
+        status.style.color = '#f00';
+        status.innerText = 'SYSTEM ERROR. ' + e.message;
+        btn.style.display = 'inline-block';
+        btn.innerText = 'RETRY ERROR';
+        speak("System error during biometric scan.");
+      }
+    }
+    
+    // Ensure voices and camera are loaded
+    window.onload = () => {
+      initCamera();
+    };
+    window.speechSynthesis.onvoiceschanged = () => {};
+  </script>
+</body>
+</html>

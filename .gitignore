@@ -1,0 +1,38 @@
+# JARVIS Core - Security Policy
+# ------------------------------
+# Prevent secret leakage and telemetry bloat
+
+# Secrets & Sessions
+.env
+.session_token
+*.key
+*.cert
+
+# Compiled & Caches
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.mypy_cache/
+
+# Local Data & Telemetry
+*.log
+*.db
+*.sqlite
+imagedata/
+data/
+logs/
+
+# Binary & OS
+.DS_Store
+Thumbs.db
+*.exe
+*.bin
+*.pt
+*.onnx
+
+# Misc
+*.old
+*.test
+debug_*.py
+test_*_final.py

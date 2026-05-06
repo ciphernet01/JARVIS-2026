@@ -1,0 +1,355 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="JARVIS AI Assistant — Iron Man HUD Dashboard">
+  <title>JARVIS // Neural Interface</title>
+  <link rel="stylesheet" href="/static/style.css">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>J</text></svg>">
+</head>
+<body>
+
+<div class="dashboard">
+
+  <!-- ═══ TOP BAR ═══════════════════════════════════════════════════════ -->
+  <header class="top-bar">
+    <div class="top-bar__brand">
+      <div class="top-bar__logo">J.A.R.V.I.S</div>
+      <div class="top-bar__separator"></div>
+      <div class="top-bar__subtitle">NEURAL ASSISTANT INTERFACE</div>
+    </div>
+    <div class="top-bar__center">
+      <div id="status-chip" class="status-indicator status-indicator--online">
+        <span class="status-dot"></span>
+        ONLINE
+      </div>
+      <div class="net-bars">
+        <div class="net-bars__bar"></div>
+        <div class="net-bars__bar"></div>
+        <div class="net-bars__bar"></div>
+        <div class="net-bars__bar"></div>
+      </div>
+    </div>
+    <div style="text-align:right">
+      <div id="top-clock" class="top-bar__clock">--:--:--</div>
+      <div id="top-date" class="top-bar__date">---</div>
+    </div>
+  </header>
+
+  <!-- ═══ LEFT COLUMN ══════════════════════════════════════════════════ -->
+  <div class="left-col">
+
+    <!-- Calendar -->
+    <div class="panel calendar-widget">
+      <div class="panel__title">Calendar</div>
+      <div id="cal-day" class="calendar-widget__day-num">--</div>
+      <div id="cal-month" class="calendar-widget__month">---</div>
+      <div id="cal-weekday" class="calendar-widget__weekday">---</div>
+      <div id="cal-year" class="calendar-widget__year">----</div>
+      <div id="week-row" class="week-row"></div>
+    </div>
+
+    <!-- System Diagnostics -->
+    <div class="panel diagnostics">
+      <div class="panel__title">System Diagnostics</div>
+
+      <!-- CPU -->
+      <div class="gauge">
+        <div class="gauge__ring">
+          <svg viewBox="0 0 56 56">
+            <circle class="gauge-bg" cx="28" cy="28" r="24"/>
+            <circle class="gauge-fill" id="gauge-cpu-fill" cx="28" cy="28" r="24"
+              stroke-dasharray="150.8" stroke-dashoffset="150.8"/>
+          </svg>
+          <div class="gauge-value" id="gauge-cpu-value">--%</div>
+        </div>
+        <div class="gauge__info">
+          <div class="gauge__label">CPU</div>
+          <div class="gauge__detail" id="gauge-cpu-detail">Loading...</div>
+          <div class="gauge__bar"><div class="gauge__bar-fill" id="gauge-cpu-bar" style="width:0%"></div></div>
+        </div>
+      </div>
+
+      <!-- Memory -->
+      <div class="gauge">
+        <div class="gauge__ring">
+          <svg viewBox="0 0 56 56">
+            <circle class="gauge-bg" cx="28" cy="28" r="24"/>
+            <circle class="gauge-fill" id="gauge-memory-fill" cx="28" cy="28" r="24"
+              stroke-dasharray="150.8" stroke-dashoffset="150.8"/>
+          </svg>
+          <div class="gauge-value" id="gauge-memory-value">--%</div>
+        </div>
+        <div class="gauge__info">
+          <div class="gauge__label">MEMORY</div>
+          <div class="gauge__detail" id="gauge-memory-detail">Loading...</div>
+          <div class="gauge__bar"><div class="gauge__bar-fill" id="gauge-memory-bar" style="width:0%"></div></div>
+        </div>
+      </div>
+
+      <!-- Disk -->
+      <div class="gauge">
+        <div class="gauge__ring">
+          <svg viewBox="0 0 56 56">
+            <circle class="gauge-bg" cx="28" cy="28" r="24"/>
+            <circle class="gauge-fill" id="gauge-disk-fill" cx="28" cy="28" r="24"
+              stroke-dasharray="150.8" stroke-dashoffset="150.8"/>
+          </svg>
+          <div class="gauge-value" id="gauge-disk-value">--%</div>
+        </div>
+        <div class="gauge__info">
+          <div class="gauge__label">DISK</div>
+          <div class="gauge__detail" id="gauge-disk-detail">Loading...</div>
+          <div class="gauge__bar"><div class="gauge__bar-fill" id="gauge-disk-bar" style="width:0%"></div></div>
+        </div>
+      </div>
+
+      <!-- Battery -->
+      <div class="gauge" id="gauge-battery" style="display:none">
+        <div class="gauge__ring">
+          <svg viewBox="0 0 56 56">
+            <circle class="gauge-bg" cx="28" cy="28" r="24"/>
+            <circle class="gauge-fill" id="gauge-battery-fill" cx="28" cy="28" r="24"
+              stroke-dasharray="150.8" stroke-dashoffset="150.8"/>
+          </svg>
+          <div class="gauge-value" id="gauge-battery-value">--%</div>
+        </div>
+        <div class="gauge__info">
+          <div class="gauge__label">BATTERY</div>
+          <div class="gauge__detail" id="gauge-battery-detail">Loading...</div>
+          <div class="gauge__bar"><div class="gauge__bar-fill" id="gauge-battery-bar" style="width:0%"></div></div>
+        </div>
+      </div>
+
+      <!-- Network -->
+      <div style="display:flex;gap:14px;margin-top:6px">
+        <div style="flex:1">
+          <div class="gauge__label">↑ SENT</div>
+          <div class="gauge__detail" id="net-sent">--</div>
+        </div>
+        <div style="flex:1">
+          <div class="gauge__label">↓ RECV</div>
+          <div class="gauge__detail" id="net-recv">--</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Quick Commands -->
+    <div class="panel">
+      <div class="panel__title">Quick Commands</div>
+      <div class="quick-actions">
+        <button class="quick-btn" data-cmd="what time is it"><span class="quick-btn__icon">&gt;</span> What time is it?</button>
+        <button class="quick-btn" data-cmd="what date is today"><span class="quick-btn__icon">&gt;</span> What's today's date?</button>
+        <button class="quick-btn" data-cmd="system info"><span class="quick-btn__icon">&gt;</span> System Information</button>
+        <button class="quick-btn" data-cmd="show help"><span class="quick-btn__icon">&gt;</span> Show Help</button>
+        <button class="quick-btn" data-cmd="weather in London"><span class="quick-btn__icon">&gt;</span> Weather Report</button>
+        <button class="quick-btn" data-cmd="status"><span class="quick-btn__icon">&gt;</span> JARVIS Status</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ CENTER COLUMN ════════════════════════════════════════════════ -->
+  <div class="center-col" style="position: relative;">
+
+    <!-- World Map Background (D3 Interface) -->
+    <div id="world-map-container" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 0; opacity: 0.2; pointer-events: none; display: flex; align-items: center; justify-content: center; overflow: hidden;">
+    </div>
+
+    <!-- Arc Reactor -->
+    <div class="panel arc-reactor-container" style="z-index: 1;">
+      <div class="arc-reactor">
+        <!-- Outer rotating rings SVG -->
+        <svg viewBox="0 0 280 280" xmlns="http://www.w3.org/2000/svg">
+          <!-- Outer ring with dashes -->
+          <circle cx="140" cy="140" r="136" fill="none" stroke="rgba(0,212,255,0.12)" stroke-width="1"/>
+          <circle cx="140" cy="140" r="136" fill="none" stroke="rgba(0,212,255,0.35)" stroke-width="2"
+            stroke-dasharray="8 12" stroke-linecap="round"/>
+          
+          <!-- Second ring -->
+          <circle cx="140" cy="140" r="122" fill="none" stroke="rgba(0,212,255,0.08)" stroke-width="1"/>
+          <circle cx="140" cy="140" r="122" fill="none" stroke="rgba(0,212,255,0.25)" stroke-width="1.5"
+            stroke-dasharray="20 8 4 8"/>
+
+          <!-- Arc segments -->
+          <path d="M 140 16 A 124 124 0 0 1 250 80" fill="none" stroke="rgba(0,212,255,0.4)" stroke-width="3" stroke-linecap="round"/>
+          <path d="M 264 140 A 124 124 0 0 1 200 250" fill="none" stroke="rgba(0,212,255,0.3)" stroke-width="2" stroke-linecap="round"/>
+          <path d="M 80 260 A 124 124 0 0 1 16 140" fill="none" stroke="rgba(0,212,255,0.35)" stroke-width="2.5" stroke-linecap="round"/>
+
+          <!-- Inner decorative ring -->
+          <circle cx="140" cy="140" r="100" fill="none" stroke="rgba(0,212,255,0.15)" stroke-width="1"
+            stroke-dasharray="4 6"/>
+          
+          <!-- Tick marks -->
+          <g stroke="rgba(0,212,255,0.3)" stroke-width="1">
+            <line x1="140" y1="8" x2="140" y2="22"/>
+            <line x1="272" y1="140" x2="258" y2="140"/>
+            <line x1="140" y1="272" x2="140" y2="258"/>
+            <line x1="8" y1="140" x2="22" y2="140"/>
+          </g>
+
+          <!-- Small indicator dots -->
+          <circle cx="140" cy="8" r="3" fill="rgba(0,212,255,0.6)"/>
+          <circle cx="272" cy="140" r="2.5" fill="rgba(0,212,255,0.5)"/>
+          <circle cx="140" cy="272" r="2" fill="rgba(0,212,255,0.4)"/>
+          <circle cx="8" cy="140" r="2.5" fill="rgba(0,212,255,0.5)"/>
+
+          <!-- Core glow -->
+          <defs>
+            <radialGradient id="coreGlow" cx="50%" cy="50%" r="50%">
+              <stop offset="0%" stop-color="rgba(0,212,255,0.15)"/>
+              <stop offset="60%" stop-color="rgba(0,212,255,0.05)"/>
+              <stop offset="100%" stop-color="transparent"/>
+            </radialGradient>
+          </defs>
+          <circle cx="140" cy="140" r="80" fill="url(#coreGlow)"/>
+
+          <!-- Crosshairs -->
+          <line x1="60" y1="140" x2="220" y2="140" stroke="rgba(0,212,255,0.12)" stroke-width="0.5"/>
+          <line x1="140" y1="60" x2="140" y2="220" stroke="rgba(0,212,255,0.12)" stroke-width="0.5"/>
+        </svg>
+
+        <!-- Inner counter-rotating ring -->
+        <div class="arc-reactor__inner-ring"></div>
+
+        <!-- Core content -->
+        <div class="arc-reactor__core">
+          <div class="arc-reactor__core-glow"></div>
+          <div id="reactor-time" class="arc-reactor__time">--:--</div>
+          <div class="arc-reactor__label">JARVIS CORE ACTIVE</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Command Terminal -->
+    <div class="panel terminal">
+      <div class="panel__title">Command Terminal</div>
+      <div class="terminal__voicebar">
+        <button class="voice-btn" id="voice-toggle" type="button" title="Start voice input">VOICE</button>
+        <button class="voice-btn voice-btn--secondary" id="speak-toggle" type="button" title="Toggle speech output">SPEAK: ON</button>
+        <button class="voice-btn voice-btn--secondary" id="handsfree-toggle" type="button" title="Toggle hands-free wake word mode">HANDS-FREE: OFF</button>
+        <div class="voice-status" id="voice-status">Voice idle</div>
+      </div>
+      <div class="terminal__output" id="terminal-output"></div>
+      <div class="terminal__input-row">
+        <input type="text" class="terminal__input" id="cmd-input"
+               placeholder="Issue a command... e.g. 'what time is it' or 'search for Tesla news'"
+               autocomplete="off" spellcheck="false">
+        <button class="terminal__send" id="cmd-send">EXECUTE</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ RIGHT COLUMN ═════════════════════════════════════════════════ -->
+  <div class="right-col">
+
+    <!-- Neural Sensor (Vision AI) -->
+    <div class="panel neural-sensor">
+      <div class="panel__title">Neural Sensor [ACTIVE]</div>
+      <div class="sensor-feed">
+        <video id="vision-feed" autoplay playsinline muted></video>
+        <canvas id="vision-canvas" style="display:none"></canvas>
+        <div class="sensor-overlay">
+          <div class="sensor-corners"></div>
+          <div class="sensor-scanline"></div>
+        </div>
+      </div>
+      <div class="sensor-metrics">
+        <div class="sensor-metric">
+          <span class="sensor-label">OPTICAL_LINK:</span>
+          <span class="sensor-value sensor-value--online">ENCRYPTED</span>
+        </div>
+        <div class="sensor-metric">
+          <span class="sensor-label">FRAME_SYNC:</span>
+          <span class="sensor-value" id="frame-sync-status">-- FPS</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Weather -->
+    <div class="panel weather">
+      <div class="panel__title">Weather</div>
+      <div id="weather-temp" class="weather__temp">--<span>°C</span></div>
+      <div id="weather-desc" class="weather__desc">Loading...</div>
+      <div id="weather-location" class="weather__location">---</div>
+      <div class="weather__details">
+        <div class="weather__detail">
+          <div class="weather__detail-label">HUMIDITY</div>
+          <div class="weather__detail-value" id="weather-humid">--%</div>
+        </div>
+        <div class="weather__detail">
+          <div class="weather__detail-label">WIND</div>
+          <div class="weather__detail-value" id="weather-wind">-- km/h</div>
+        </div>
+        <div class="weather__detail">
+          <div class="weather__detail-label">FEELS LIKE</div>
+          <div class="weather__detail-value" id="weather-feels">--°C</div>
+        </div>
+        <div class="weather__detail">
+          <div class="weather__detail-label">WIND DIR</div>
+          <div class="weather__detail-value" id="weather-winddir">--</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- System Status -->
+    <div class="panel system-status">
+      <div class="panel__title">System Status</div>
+      <div class="status-row">
+        <span class="status-row__label">Skills Loaded</span>
+        <span class="status-row__value status-row__value--number" id="status-skills">--</span>
+      </div>
+      <div class="status-row">
+        <span class="status-row__label">Persistence</span>
+        <span class="status-row__value status-row__value--online" id="status-persistence">--</span>
+      </div>
+      <div class="status-row">
+        <span class="status-row__label">Conversations</span>
+        <span class="status-row__value status-row__value--number" id="status-conversations">--</span>
+      </div>
+      <div class="status-row">
+        <span class="status-row__label">Platform</span>
+        <span class="status-row__value status-row__value--number" id="status-platform">--</span>
+      </div>
+      <div class="status-row">
+        <span class="status-row__label">Uptime</span>
+        <span class="status-row__value status-row__value--number" id="status-uptime">--</span>
+      </div>
+    </div>
+
+    <!-- Activity Feed -->
+    <div class="panel activity-feed">
+      <div class="panel__title">Activity Feed</div>
+      <div class="activity-feed__list" id="activity-list">
+        <div class="activity-item shimmer">
+          <div class="activity-item__time">Waiting for data...</div>
+          <div class="activity-item__text">Conversation history will appear here</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ BOTTOM DOCK ══════════════════════════════════════════════════ -->
+  <nav class="bottom-dock">
+    <button class="dock-btn dock-btn--active" data-action="home" title="Dashboard">SYS</button>
+    <div class="dock-separator"></div>
+    <button class="dock-btn" data-action="youtube" title="YouTube">YT</button>
+    <button class="dock-btn" data-action="google" title="Google">WEB</button>
+    <button class="dock-btn" data-action="github" title="GitHub">GIT</button>
+    <button class="dock-btn" data-action="stackoverflow" title="Stack Overflow">DEV</button>
+    <button class="dock-btn" data-action="instagram" title="Instagram">SOC</button>
+    <div class="dock-separator"></div>
+    <button class="dock-btn" data-action="music" title="Play Music">MUS</button>
+    <button class="dock-btn" data-action="camera" title="Camera">CAM</button>
+    <button class="dock-btn" data-action="email" title="Email">MSG</button>
+    <div class="dock-separator"></div>
+    <button class="dock-btn" data-action="settings" title="Settings">CFG</button>
+    <button class="dock-btn" data-action="power" title="Shutdown">PWR</button>
+  </nav>
+
+</div>
+
+<script src="https://d3js.org/d3.v7.min.js"></script>
+<script src="/static/app.js"></script>
+</body>
+</html>
