@@ -7,8 +7,9 @@ import WeatherWidget from './WeatherWidget';
 import CalendarWidget from './CalendarWidget';
 import StatusPanel from './StatusPanel';
 import DevWorkspace from './DevWorkspace';
+import SettingsPanel from './SettingsPanel';
 import BottomDock from './BottomDock';
-import { Activity, Cpu, Cloud, Code2, Terminal as TermIcon, Zap } from 'lucide-react';
+import { Activity, Cpu, Cloud, Code2, Terminal as TermIcon, Settings, Zap } from 'lucide-react';
 
 export default function Dashboard({ token, api, onLogout }) {
   const [metrics, setMetrics] = useState(null);
@@ -66,7 +67,7 @@ export default function Dashboard({ token, api, onLogout }) {
             J.A.R.V.I.S
           </h1>
           <span className="w-px h-5 bg-cyan-500/40" />
-          <span className="font-display text-[10px] tracking-[0.2em] uppercase text-cyan-300/50">Neural Assistant Interface v2.0</span>
+          <span className="font-display text-[10px] tracking-[0.2em] uppercase text-cyan-300/50">Sypher Industries // Neural Interface v2.0</span>
         </div>
         <div className="flex items-center gap-4">
           <div className="flex items-center gap-2 px-3 py-1 border border-green-500/30 rounded-sm" data-testid="status-indicator">
@@ -113,10 +114,20 @@ export default function Dashboard({ token, api, onLogout }) {
               >
                 <Code2 size={14} /> Developer Mode
               </button>
+              <button
+                onClick={() => setActivePanel('settings')}
+                className={`flex items-center gap-2 px-4 py-2 text-xs font-display tracking-wider uppercase transition-all ${
+                  activePanel === 'settings' ? 'text-cyan-400 bg-cyan-950/40 border-b border-cyan-400' : 'text-cyan-300/50 hover:text-cyan-300'
+                }`}
+                data-testid="tab-settings"
+              >
+                <Settings size={14} /> Settings
+              </button>
             </div>
             <div className="flex-1 overflow-hidden">
               {activePanel === 'terminal' && <Terminal api={api} token={token} />}
               {activePanel === 'developer' && <DevWorkspace api={api} token={token} />}
+              {activePanel === 'settings' && <SettingsPanel api={api} token={token} />}
             </div>
           </div>
         </div>

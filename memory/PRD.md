@@ -45,6 +45,7 @@ User had an existing Python JARVIS AI assistant project (Flask-based, static HTM
 - [x] Developer Mode for coding assistance
 - [x] **VSCode Extension API** - Full IDE integration with complete/explain/fix/refactor/generate/chat actions
 - [x] **VSCode Extension Package** - Ready-to-install extension at /app/vscode-extension/
+- [x] **Face Enrollment UI** - Settings panel with live camera, capture & enroll button, stored in MongoDB
 - [x] Weather widget (real data from wttr.in)
 - [x] Calendar widget
 - [x] Voice I/O controls (Web Speech API)
