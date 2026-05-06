@@ -7,3 +7,5 @@ psutil
 requests
 pydantic
 emergentintegrations
+opencv-python-headless
+numpy

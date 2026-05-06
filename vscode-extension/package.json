@@ -1,0 +1,123 @@
+{
+  "name": "jarvis-ai-assistant",
+  "displayName": "JARVIS AI Assistant",
+  "description": "Your personal JARVIS AI coding assistant - like having Tony Stark's AI in VS Code",
+  "version": "1.0.0",
+  "publisher": "shrey-industries",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Programming Languages",
+    "Machine Learning",
+    "Other"
+  ],
+  "icon": "icon.png",
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "jarvis.chat",
+        "title": "JARVIS: Chat"
+      },
+      {
+        "command": "jarvis.explain",
+        "title": "JARVIS: Explain Selected Code"
+      },
+      {
+        "command": "jarvis.fix",
+        "title": "JARVIS: Fix Bugs in Selection"
+      },
+      {
+        "command": "jarvis.refactor",
+        "title": "JARVIS: Refactor Selected Code"
+      },
+      {
+        "command": "jarvis.generate",
+        "title": "JARVIS: Generate Code"
+      },
+      {
+        "command": "jarvis.complete",
+        "title": "JARVIS: Complete Code at Cursor"
+      }
+    ],
+    "configuration": {
+      "title": "JARVIS AI Assistant",
+      "properties": {
+        "jarvis.serverUrl": {
+          "type": "string",
+          "default": "http://localhost:8001",
+          "description": "URL of the JARVIS backend server"
+        },
+        "jarvis.authToken": {
+          "type": "string",
+          "default": "",
+          "description": "Authentication token for the JARVIS API"
+        },
+        "jarvis.autoComplete": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable inline code completion suggestions"
+        }
+      }
+    },
+    "keybindings": [
+      {
+        "command": "jarvis.chat",
+        "key": "ctrl+shift+j",
+        "mac": "cmd+shift+j"
+      },
+      {
+        "command": "jarvis.explain",
+        "key": "ctrl+shift+e",
+        "mac": "cmd+shift+e",
+        "when": "editorHasSelection"
+      },
+      {
+        "command": "jarvis.fix",
+        "key": "ctrl+shift+f",
+        "mac": "cmd+shift+f",
+        "when": "editorHasSelection"
+      },
+      {
+        "command": "jarvis.complete",
+        "key": "ctrl+shift+space",
+        "mac": "cmd+shift+space"
+      }
+    ],
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "jarvis-sidebar",
+          "title": "JARVIS",
+          "icon": "$(hubot)"
+        }
+      ]
+    },
+    "views": {
+      "jarvis-sidebar": [
+        {
+          "type": "webview",
+          "id": "jarvis.chatView",
+          "name": "JARVIS Chat"
+        }
+      ]
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./"
+  },
+  "devDependencies": {
+    "@types/vscode": "^1.85.0",
+    "@types/node": "^20.0.0",
+    "typescript": "^5.3.0"
+  },
+  "dependencies": {
+    "node-fetch": "^2.7.0"
+  }
+}
