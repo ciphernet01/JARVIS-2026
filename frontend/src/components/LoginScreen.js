@@ -138,7 +138,7 @@ export default function LoginScreen({ onLogin, api }) {
               autoPlay
               playsInline
               muted
-              className="absolute inset-0 w-full h-full object-cover"
+              className="absolute inset-0 w-full h-full object-cover z-[5]"
               style={{ transform: 'scaleX(-1)' }}
             />
           ) : (
@@ -178,9 +178,9 @@ export default function LoginScreen({ onLogin, api }) {
 
           {/* Center guide - shows where to place face */}
           {cameraActive && !faceBox && !granted && (
-            <div className="absolute inset-0 flex items-center justify-center z-10 pointer-events-none">
-              <div className="w-32 h-40 border-2 border-dashed border-cyan-400/30 rounded-full flex items-center justify-center">
-                <span className="font-mono text-[8px] text-cyan-400/40 text-center px-2">
+            <div className="absolute inset-0 flex items-center justify-center z-[15] pointer-events-none">
+              <div className="w-32 h-40 border-2 border-dashed border-cyan-400/40 rounded-full flex items-center justify-center">
+                <span className="font-mono text-[8px] text-cyan-400/60 text-center px-2">
                   POSITION<br/>FACE HERE
                 </span>
               </div>
