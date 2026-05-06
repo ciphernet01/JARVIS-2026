@@ -29,9 +29,6 @@ export default function LoginScreen({ onLogin, api }) {
         video: { width: 640, height: 480, facingMode: 'user' }
       });
       streamRef.current = stream;
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-      }
       setCameraActive(true);
       setStatus('NEURAL LINK ESTABLISHED. CAMERA ONLINE.');
     } catch (err) {
@@ -39,6 +36,14 @@ export default function LoginScreen({ onLogin, api }) {
       setStatus('CAMERA OFFLINE. FALLBACK MODE AVAILABLE.');
     }
   };
+
+  // Attach stream to video element AFTER it renders
+  useEffect(() => {
+    if (cameraActive && videoRef.current && streamRef.current) {
+      videoRef.current.srcObject = streamRef.current;
+      videoRef.current.play().catch(() => {});
+    }
+  }, [cameraActive]);
 
   const captureFrame = () => {
     if (!videoRef.current || !cameraActive) return null;
