@@ -1,0 +1,132 @@
+{
+  "theme": "dark",
+  "archetype": "7 (Electric & Neon / The Terminal Look)",
+  "rationale": "JARVIS represents the pinnacle of AI interfaces. We are leveraging Archetype 7 for its high-contrast, glowing neon terminal aesthetic. Deep slate/obsidian bases are paired with precise cyan/blue primary lighting and amber warnings. The design language relies on 'Retro-Futurism' mixed with 'Grid Borders' — prioritizing data density, command-center focus, asymmetric tension, and technical precision over soft consumer styling.",
+  "colors": {
+    "background": "#020617",
+    "surface": "rgba(2, 6, 23, 0.6)",
+    "surface_glass": "rgba(2, 6, 23, 0.85)",
+    "primary": "#06b6d4",
+    "secondary": "#0ea5e9",
+    "accent": "#f59e0b",
+    "danger": "#ef4444",
+    "text_primary": "#cffafe",
+    "text_secondary": "#67e8f9",
+    "border": "rgba(6, 182, 212, 0.3)",
+    "border_active": "rgba(6, 182, 212, 0.8)"
+  },
+  "typography": {
+    "headings": "Azeret Mono",
+    "body": "JetBrains Mono",
+    "weights": {
+      "light": 300,
+      "regular": 400,
+      "bold": 700
+    },
+    "hierarchy": {
+      "h1": "text-4xl tracking-tighter uppercase",
+      "h2": "text-2xl tracking-tight uppercase",
+      "h3": "text-lg tracking-wide uppercase",
+      "body": "text-sm leading-relaxed",
+      "label": "text-xs tracking-[0.2em] uppercase text-cyan-300"
+    }
+  },
+  "spacing_and_layout": {
+    "container_padding": "p-4 md:p-6",
+    "grid_strategy": "MODE B: THE 'CONTROL ROOM' GRID. Extreme density. Base grid: grid-cols-1 md:grid-cols-8 lg:grid-cols-12 gap-4.",
+    "widget_styling": "Flat backgrounds, strict 1px border (border-cyan-900/50), no heavy box-shadows, subtle inner glow or drop-shadow on text/SVGs. rounded-none."
+  },
+  "surface_strategies": [
+    {
+      "name": "Retro-Futurism (The Terminal Look)",
+      "application": "Dashboard Widgets, Terminals, Code Editors",
+      "css_classes": "bg-slate-950/80 text-cyan-100 border border-cyan-500/30 font-mono"
+    },
+    {
+      "name": "Glassmorphism (The 'Crystal' HUD)",
+      "application": "Floating Bottom Nav Dock, Overlays, Modals",
+      "css_classes": "bg-slate-950/70 backdrop-blur-2xl border-t border-cyan-500/40"
+    }
+  ],
+  "motion_and_interactions": {
+    "hover_state": "hover:bg-cyan-950/40 hover:border-cyan-400 hover:text-cyan-50 transition-all duration-200",
+    "active_state": "active:scale-[0.98]",
+    "special_effects": "Scanlines (repeating-linear-gradient overlay), pulsing glows (animate-pulse) for the Arc Reactor core, typing effects for AI responses."
+  },
+  "components": {
+    "biometric_login": {
+      "description": "Biometric face scan interface. Digital mesh head background with a vertical scanning laser line overlay.",
+      "classes": "min-h-screen flex items-center justify-center bg-slate-950 relative overflow-hidden"
+    },
+    "arc_reactor": {
+      "description": "Central visual anchor of the dashboard. Glowing concentric SVG circles. Rotating animations (slow spin, reverse spin on inner rings).",
+      "classes": "text-cyan-400 drop-shadow-[0_0_15px_rgba(6,182,212,0.8)]"
+    },
+    "system_diagnostics": {
+      "description": "Dense data clusters. Circular gauges and line charts for CPU/RAM/Disk. Minimalist line charts.",
+      "classes": "border border-cyan-900/50 p-4 relative"
+    },
+    "ai_command_terminal": {
+      "description": "The JARVIS command prompt. Blinking cursor '_', scrolling history of commands, voice I/O visualizer (audio waveform bars).",
+      "classes": "bg-black/90 font-mono text-cyan-400 p-4 border border-cyan-800"
+    },
+    "developer_workspace": {
+      "description": "Integrated IDE/coding assistant panel. Syntax highlighting, file tree, Copilot-like suggestion blocks.",
+      "classes": "bg-[#0d1117] text-sm overflow-hidden border border-cyan-900/40"
+    },
+    "neural_sensor_camera": {
+      "description": "Live feed or simulated camera view. Overlay with targeting brackets '[ ]' and scrolling hex codes.",
+      "classes": "relative overflow-hidden group grayscale sepia hue-rotate-[180deg]"
+    },
+    "weather_and_calendar": {
+      "description": "Satellite view background for weather, integrated with a stark, data-driven calendar.",
+      "classes": "relative border border-cyan-900/50"
+    },
+    "bottom_navigation_dock": {
+      "description": "Central floating dock at the bottom of the viewport for quick module switching.",
+      "classes": "fixed bottom-6 left-1/2 -translate-x-1/2 flex gap-4 px-6 py-3"
+    }
+  },
+  "media": {
+    "image_urls": {
+      "camera_feed_bg": {
+        "url": "https://images.unsplash.com/photo-1658488672170-6e92dfddc3cd?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1ODh8MHwxfHNlYXJjaHwxfHxjeWJlcnB1bmslMjBuaWdodCUyMHN0cmVldHxlbnwwfHx8fDE3NzgwODU0NTV8MA&ixlib=rb-4.1.0&q=85",
+        "description": "Cyberpunk night street for the neural sensor camera background.",
+        "category": "neural_sensor_camera"
+      },
+      "biometric_mesh": {
+        "url": "https://images.unsplash.com/photo-1698571262509-5e96d6c64bd1?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NTYxOTF8MHwxfHNlYXJjaHwzfHxkaWdpdGFsJTIwZmFjZSUyMG1lc2h8ZW58MHx8fHwxNzc4MDg1NDU1fDA&ixlib=rb-4.1.0&q=85",
+        "description": "Wire sculpture of a human head, used for the biometric face scan overlay.",
+        "category": "biometric_login"
+      },
+      "abstract_hologram": {
+        "url": "https://images.unsplash.com/photo-1738684701142-1942ac459029?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjY2NjV8MHwxfHNlYXJjaHwzfHxhYnN0cmFjdCUyMGhvbG9ncmFwaGljJTIwY3lhbnxlbnwwfHx8fDE3NzgwODU0NTV8MA&ixlib=rb-4.1.0&q=85",
+        "description": "Abstract blue/cyan holographic swirl to use as ambient background or behind the arc reactor.",
+        "category": "background_texture"
+      },
+      "satellite_view": {
+        "url": "https://images.pexels.com/photos/30596263/pexels-photo-30596263.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
+        "description": "Earth from space at night with glowing city lights, used for the weather/geo-widget.",
+        "category": "weather_widget"
+      }
+    }
+  },
+  "libraries": {
+    "icons": "yarn add @phosphor-icons/react (Using tech/geometry-focused icons like TerminalWindow, Cpu, Database, Activity, Eye, Scan)",
+    "charts": "recharts (styled strictly with cyan strokes and transparent fills, no soft gradients)",
+    "animations": "framer-motion (crucial for HUD pop-ins, scanning laser logic, typing effects, and arc reactor spin)",
+    "misc": "lucide-react (fallback), react-fast-marquee (for scrolling data feeds)"
+  },
+  "instructions_to_main_agent": [
+    "1. Layout & Grid: Implement a massive 'Control Room' bento grid. The dashboard should ideally be full height (h-screen) with overflow handled inside specific panels (like the terminal or activity feed). No large white space. Every panel should have a 1px solid border (`border-cyan-900/50`).",
+    "2. Typography: All text must be highly legible and technical. Import and use 'JetBrains Mono' for data/terminal outputs and 'Azeret Mono' for component headers. Do not use generic sans-serif fonts (like Inter).",
+    "3. Arc Reactor: Build this as a complex SVG element centrally located. It MUST use Framer Motion or CSS animations to continuously rotate concentric rings at different speeds/directions. Apply heavy drop-shadows to simulate a glowing light source.",
+    "4. Neural Sensor Camera: Use the 'camera_feed_bg' image, scaled with `object-cover`. Add a `mix-blend-luminosity` and `opacity-50` overlay of cyan (`bg-cyan-900/30`). Render absolute positioned SVG corner crosshairs and a blinking red 'REC / ANALYZING' badge.",
+    "5. Weather & Calendar: Use the 'satellite_view' image for the weather widget backdrop with a heavy dark overlay. The calendar should be a dense data-grid of days, not a standard soft SaaS calendar.",
+    "6. Biometric Login View: Create a dedicated route/view for this. Use the 'biometric_mesh' image centered. Implement a horizontal scanning laser line (a 1px cyan div with heavy glow) that animates vertically across the face using Framer Motion.",
+    "7. Edge Styling: Do NOT use rounded corners. Enforce `rounded-none` or at most `rounded-sm` (2px) to maintain the military/tech hardware HUD feel.",
+    "8. Charting: Use Recharts for the system diagnostics. Style the Line/Area charts purely with thin colored lines (`stroke='#06b6d4'`, `strokeWidth={1}`), no thick bars. Add raw data point labels.",
+    "9. Interaction: Add `data-testid` attributes to all interactive elements. Ensure hover states on buttons/links use inverted styling (cyan background, slate text) for the classic terminal selection look.",
+    "10. Navigation: The 'Bottom Navigation Dock' should be fixed, using the 'Glassmorphism' surface strategy (backdrop-blur-2xl) to overlap the grid."
+  ]
+}
