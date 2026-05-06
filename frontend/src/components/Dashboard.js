@@ -16,25 +16,29 @@ export default function Dashboard({ token, api, onLogout }) {
   const [status, setStatus] = useState(null);
   const [activePanel, setActivePanel] = useState('terminal');
 
-  const headers = { 'X-JARVIS-TOKEN': token, 'Content-Type': 'application/json' };
-
   const fetchMetrics = useCallback(async () => {
     try {
-      const resp = await fetch(`${api}/api/system/metrics`, { headers });
+      const resp = await fetch(`${api}/api/system/metrics`, {
+        headers: { 'X-JARVIS-TOKEN': token, 'Content-Type': 'application/json' }
+      });
       if (resp.ok) setMetrics(await resp.json());
     } catch (e) { /* silent */ }
   }, [api, token]);
 
   const fetchWeather = useCallback(async () => {
     try {
-      const resp = await fetch(`${api}/api/weather`, { headers });
+      const resp = await fetch(`${api}/api/weather`, {
+        headers: { 'X-JARVIS-TOKEN': token, 'Content-Type': 'application/json' }
+      });
       if (resp.ok) setWeather(await resp.json());
     } catch (e) { /* silent */ }
   }, [api, token]);
 
   const fetchStatus = useCallback(async () => {
     try {
-      const resp = await fetch(`${api}/api/status`, { headers });
+      const resp = await fetch(`${api}/api/status`, {
+        headers: { 'X-JARVIS-TOKEN': token, 'Content-Type': 'application/json' }
+      });
       if (resp.ok) setStatus(await resp.json());
     } catch (e) { /* silent */ }
   }, [api, token]);
