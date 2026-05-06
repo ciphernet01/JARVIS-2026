@@ -38,19 +38,23 @@ User had an existing Python JARVIS AI assistant project (Flask-based, static HTM
 - [x] Full FastAPI backend with Gemini AI integration
 - [x] React frontend with JARVIS HUD design
 - [x] Biometric login flow (simulated)
+- [x] **Real webcam face verification** - Live camera feed on login, OpenCV Haar cascade face detection, face enrollment/comparison via histogram
 - [x] Arc Reactor SVG animation
 - [x] System diagnostics with live metrics
 - [x] AI chat terminal (Gemini 2.5 Flash)
 - [x] Developer Mode for coding assistance
+- [x] **VSCode Extension API** - Full IDE integration with complete/explain/fix/refactor/generate/chat actions
+- [x] **VSCode Extension Package** - Ready-to-install extension at /app/vscode-extension/
 - [x] Weather widget (real data from wttr.in)
 - [x] Calendar widget
 - [x] Voice I/O controls (Web Speech API)
 - [x] System status panel
 - [x] Bottom navigation dock
 - [x] Session-based auth with token
+- [x] Face enrollment endpoint for storing biometric profiles
 
 ## Testing Status
-- Backend: 100% (17/17 tests passed)
+- Backend: 100% (36/36 tests passed)
 - Frontend: 100% (all flows working)
 
 ## Prioritized Backlog
@@ -59,29 +63,28 @@ User had an existing Python JARVIS AI assistant project (Flask-based, static HTM
 - None remaining
 
 ### P1 (High)
-- VSCode extension integration for real IDE connectivity
 - Ollama local model fallback (when no internet)
-- Real face recognition via webcam
-- Conversation history persistence view
+- Real-time inline code completion streaming
+- Conversation history persistence view in dashboard
 
 ### P2 (Medium)
 - Multi-turn conversation context (chat memory across sessions)
-- File management skills (read/write workspace files)
-- Code execution sandbox
+- Face enrollment UI in dashboard settings
+- Code execution sandbox in developer workspace
 - Agent workflow planner UI
-- Dark/light theme toggle
 - Responsive mobile layout
 
 ### P3 (Low/Future)
 - Email integration
 - Calendar events from Google Calendar
-- Spotify/music integration
+- Spotify/music integration  
 - Smart home controls
 - GitHub integration (PR reviews, commits)
 - Screen capture & analysis
+- Voice-activated wake word ("Hey JARVIS")
 
 ## Next Tasks
-1. Add VSCode extension manifest for real IDE integration
-2. Implement conversation history panel in UI
-3. Add Ollama fallback when Gemini is unavailable
-4. Implement real webcam face verification on login
+1. Add Ollama fallback when Gemini is unavailable
+2. Add face enrollment UI in the dashboard (Settings panel)
+3. Implement conversation history panel
+4. Add code execution sandbox
