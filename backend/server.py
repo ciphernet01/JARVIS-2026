@@ -161,12 +161,12 @@ async def health_check():
 
 @app.post("/api/auth/login")
 async def login(req: LoginRequest):
-    """Biometric face verification login"""
+    """Biometric face verification login - checks against imagedata/ folder and enrolled faces"""
     face_detected = False
     face_confidence = 0.0
+    face_box = None  # {x, y, w, h} for frontend to draw rectangle
     verification_method = req.method
 
-    # If image provided, perform real face detection
     if req.image:
         try:
             img_data = req.image
@@ -179,45 +179,97 @@ async def login(req: LoginRequest):
             if frame is not None:
                 gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
                 faces = face_cascade.detectMultiScale(
-                    gray, scaleFactor=1.1, minNeighbors=5, minSize=(60, 60)
+                    gray, scaleFactor=1.1, minNeighbors=5, minSize=(50, 50)
                 )
+
                 if len(faces) > 0:
                     face_detected = True
-                    # Calculate confidence based on face size relative to frame
                     x, y, w, h = max(faces, key=lambda r: r[2] * r[3])
-                    face_area = w * h
-                    frame_area = frame.shape[0] * frame.shape[1]
-                    face_confidence = min(1.0, (face_area / frame_area) * 10)
+                    frame_h, frame_w = frame.shape[:2]
+                    # Normalize face box coordinates (0-1) for frontend
+                    face_box = {
+                        "x": float(x) / frame_w,
+                        "y": float(y) / frame_h,
+                        "w": float(w) / frame_w,
+                        "h": float(h) / frame_h,
+                    }
 
-                    # Check against enrolled faces
+                    # Extract face crop for comparison
+                    face_crop = gray[y:y+h, x:x+w]
+                    face_crop_resized = cv2.resize(face_crop, (128, 128))
+                    candidate_hist = cv2.calcHist([face_crop_resized], [0], None, [64], [0, 256])
+                    cv2.normalize(candidate_hist, candidate_hist)
+
+                    best_score = 0.0
+                    matched_against = None
+
+                    # Method 1: Check imagedata/ folder (reference photos)
+                    import glob
+                    imagedata_dir = Path(__file__).parent.parent / "imagedata"
+                    ref_paths = []
+                    if imagedata_dir.exists():
+                        ref_paths = list(imagedata_dir.glob("*.jpg")) + list(imagedata_dir.glob("*.jpeg")) + list(imagedata_dir.glob("*.png"))
+
+                    for ref_path in ref_paths:
+                        try:
+                            ref_img = cv2.imread(str(ref_path))
+                            if ref_img is None:
+                                continue
+                            ref_gray = cv2.cvtColor(ref_img, cv2.COLOR_BGR2GRAY)
+                            ref_faces = face_cascade.detectMultiScale(ref_gray, scaleFactor=1.1, minNeighbors=5, minSize=(50, 50))
+                            if len(ref_faces) > 0:
+                                rx, ry, rw, rh = max(ref_faces, key=lambda r: r[2] * r[3])
+                                ref_crop = ref_gray[ry:ry+rh, rx:rx+rw]
+                            else:
+                                ref_crop = ref_gray
+                            ref_crop_resized = cv2.resize(ref_crop, (128, 128))
+                            ref_hist = cv2.calcHist([ref_crop_resized], [0], None, [64], [0, 256])
+                            cv2.normalize(ref_hist, ref_hist)
+                            score = cv2.compareHist(candidate_hist, ref_hist, cv2.HISTCMP_CORREL)
+                            if score > best_score:
+                                best_score = score
+                                matched_against = f"imagedata/{ref_path.name}"
+                        except Exception:
+                            continue
+
+                    # Method 2: Check MongoDB enrolled faces
                     enrolled = await db[FACE_COLLECTION].find_one({"label": "owner"})
                     if enrolled:
-                        # Compare face histograms
-                        face_crop = gray[y:y+h, x:x+w]
-                        face_crop = cv2.resize(face_crop, (128, 128))
-                        hist = cv2.calcHist([face_crop], [0], None, [64], [0, 256])
-                        cv2.normalize(hist, hist)
                         stored_hist = np.array(enrolled["histogram"], dtype=np.float32)
-                        similarity = cv2.compareHist(hist, stored_hist, cv2.HISTCMP_CORREL)
-                        face_confidence = max(0.0, similarity)
-                        if similarity < 0.3:
-                            return {
-                                "success": False,
-                                "message": f"Face not recognized. Similarity: {similarity:.2f}",
-                                "face_detected": True,
-                                "confidence": face_confidence,
-                            }
+                        score = cv2.compareHist(candidate_hist, stored_hist, cv2.HISTCMP_CORREL)
+                        if score > best_score:
+                            best_score = score
+                            matched_against = "enrolled_profile"
+
+                    face_confidence = max(0.0, best_score)
+
+                    # If we have reference data and score is too low, deny
+                    if (ref_paths or enrolled) and best_score < 0.3:
+                        return {
+                            "success": False,
+                            "message": f"Face not recognized. Similarity: {best_score:.2f}. Access denied.",
+                            "face_detected": True,
+                            "face_box": face_box,
+                            "confidence": face_confidence,
+                        }
+
+                    # If no reference data exists, accept any face
+                    if not ref_paths and not enrolled:
+                        face_confidence = 1.0
+                        matched_against = "no_reference_enrolled"
+
                     verification_method = "face_verified"
+                    logger.info(f"Face verified against: {matched_against}, score: {best_score:.3f}")
                 else:
                     return {
                         "success": False,
-                        "message": "No face detected in frame. Please position your face clearly.",
+                        "message": "No face detected. Position your face in the center of the frame.",
                         "face_detected": False,
+                        "face_box": None,
                         "confidence": 0.0,
                     }
         except Exception as e:
             logger.error(f"Face verification error: {e}")
-            # Fall through to allow login even if face detection fails
             verification_method = "biometric_fallback"
 
     token = str(uuid.uuid4())
@@ -249,6 +301,7 @@ async def login(req: LoginRequest):
         "message": message,
         "user": {"name": "Sir", "id": "shrey_ceo"},
         "face_detected": face_detected,
+        "face_box": face_box,
         "confidence": face_confidence,
     }
 
