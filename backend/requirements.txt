@@ -1,0 +1,9 @@
+fastapi
+uvicorn
+motor
+pymongo
+python-dotenv
+psutil
+requests
+pydantic
+emergentintegrations
