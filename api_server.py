@@ -1,6 +1,8 @@
 """
-JARVIS Web Dashboard API Server
-Lightweight Flask server exposing REST endpoints over jarvis-core
+Legacy JARVIS Flask/static dashboard server.
+
+Active web development uses the React frontend on port 3000 and the
+FastAPI backend in backend/server.py on port 8001.
 """
 
 import sys
@@ -876,8 +878,8 @@ def performance_status():
 # ── Entry Point ──────────────────────────────────────────────────────────────
 if __name__ == "__main__":
     print("\n" + "=" * 55)
-    print("  JARVIS HUD Dashboard")
-    print("  Open → http://localhost:5000")
+    print("  Legacy JARVIS Flask Dashboard")
+    print("  Open → http://localhost:8001")
     print("=" * 55 + "\n")
     debug_mode = os.getenv("JARVIS_DEBUG", "1").lower() in {"1", "true", "yes"}
-    app.run(host="0.0.0.0", port=int(os.getenv("JARVIS_PORT", "5000")), debug=debug_mode)
+    app.run(host="0.0.0.0", port=int(os.getenv("JARVIS_BACKEND_PORT", "8001")), debug=debug_mode)

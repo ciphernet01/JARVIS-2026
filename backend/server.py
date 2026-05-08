@@ -9,6 +9,9 @@ import logging
 import platform
 import uuid
 import base64
+import re
+import shutil
+import subprocess
 import psutil
 import numpy as np
 import requests as http_requests
@@ -32,9 +35,9 @@ logger = logging.getLogger(__name__)
 APP_START_TIME = datetime.now(timezone.utc)
 
 # MongoDB
-MONGO_URL = os.environ.get("MONGO_URL")
-DB_NAME = os.environ.get("DB_NAME")
-client = AsyncIOMotorClient(MONGO_URL)
+MONGO_URL = os.environ.get("MONGO_URL", "mongodb://localhost:27017")
+DB_NAME = os.environ.get("DB_NAME", "jarvis")
+client = AsyncIOMotorClient(MONGO_URL, serverSelectionTimeoutMS=2000)
 db = client[DB_NAME]
 
 # Emergent LLM
@@ -72,6 +75,11 @@ class CommandRequest(BaseModel):
     command: str
     session_id: Optional[str] = None
 
+class OperatorRequest(BaseModel):
+    command: str
+    session_id: Optional[str] = None
+    dry_run: bool = False
+
 class CodeRequest(BaseModel):
     prompt: str
     repo_context: Optional[str] = None
@@ -96,6 +104,231 @@ def verify_token(request: Request):
     if not token or token not in SESSION_TOKENS:
         raise HTTPException(status_code=401, detail="Unauthorized. Security protocol active.")
     return SESSION_TOKENS[token]
+
+
+# Operator Core
+WORKSPACE_ROOT = Path(__file__).resolve().parent.parent
+GENERATED_APPS_DIR = WORKSPACE_ROOT / "generated_apps"
+
+APP_ALLOWLIST = {
+    "notepad": "notepad.exe",
+    "calculator": "calc.exe",
+    "calc": "calc.exe",
+    "explorer": "explorer.exe",
+    "file explorer": "explorer.exe",
+    "paint": "mspaint.exe",
+    "terminal": "wt.exe",
+    "powershell": "powershell.exe",
+    "vscode": "code.cmd",
+    "vs code": "code.cmd",
+}
+
+
+def _safe_name(value: str, default: str = "jarvis-app") -> str:
+    slug = re.sub(r"[^a-zA-Z0-9_-]+", "-", value.strip().lower()).strip("-")
+    return slug[:60] or default
+
+
+def _resolve_workspace_path(raw_path: Optional[str] = None) -> Path:
+    if not raw_path:
+        return WORKSPACE_ROOT
+    candidate = (WORKSPACE_ROOT / raw_path).resolve()
+    if WORKSPACE_ROOT not in candidate.parents and candidate != WORKSPACE_ROOT:
+        raise HTTPException(status_code=400, detail="Path is outside the JARVIS workspace")
+    return candidate
+
+
+def _system_snapshot() -> Dict[str, Any]:
+    memory = psutil.virtual_memory()
+    disk = psutil.disk_usage(str(WORKSPACE_ROOT.anchor or WORKSPACE_ROOT))
+    battery = psutil.sensors_battery()
+    return {
+        "platform": f"{platform.system()} {platform.release()}",
+        "cpu_percent": psutil.cpu_percent(interval=None),
+        "memory_percent": memory.percent,
+        "memory_available_gb": round(memory.available / (1024**3), 2),
+        "disk_percent": disk.percent,
+        "battery_percent": battery.percent if battery else None,
+        "power_plugged": battery.power_plugged if battery else None,
+    }
+
+
+def _list_workspace(raw_path: Optional[str] = None) -> Dict[str, Any]:
+    target = _resolve_workspace_path(raw_path)
+    if not target.exists():
+        raise HTTPException(status_code=404, detail="Path does not exist")
+    if target.is_file():
+        return {"path": str(target.relative_to(WORKSPACE_ROOT)), "type": "file", "size": target.stat().st_size}
+
+    entries = []
+    for item in sorted(target.iterdir(), key=lambda p: (p.is_file(), p.name.lower()))[:40]:
+        entries.append({
+            "name": item.name,
+            "type": "directory" if item.is_dir() else "file",
+            "size": item.stat().st_size if item.is_file() else None,
+        })
+    return {
+        "path": "." if target == WORKSPACE_ROOT else str(target.relative_to(WORKSPACE_ROOT)),
+        "entries": entries,
+    }
+
+
+def _open_allowed_app(command: str, dry_run: bool = False) -> Dict[str, Any]:
+    lowered = command.lower()
+    app_key = None
+    for alias in sorted(APP_ALLOWLIST, key=len, reverse=True):
+        if alias in lowered:
+            app_key = alias
+            break
+    if not app_key:
+        raise HTTPException(status_code=400, detail="App is not in the operator allowlist")
+
+    executable = APP_ALLOWLIST[app_key]
+    resolved = shutil.which(executable) or executable
+    if not dry_run:
+        subprocess.Popen([resolved], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, shell=False)
+    return {"app": app_key, "executable": executable, "launched": not dry_run}
+
+
+def _create_static_app(command: str, dry_run: bool = False) -> Dict[str, Any]:
+    raw_name = "jarvis-app"
+    for pattern in [
+        r"\bcalled\s+([a-zA-Z0-9 _-]{2,60})",
+        r"\bnamed\s+([a-zA-Z0-9 _-]{2,60})",
+        r"\bname\s+([a-zA-Z0-9 _-]{2,60})",
+        r"\bapp\s+([a-zA-Z0-9 _-]{2,60})",
+    ]:
+        name_match = re.search(pattern, command, re.IGNORECASE)
+        if name_match:
+            raw_name = name_match.group(1)
+            break
+    app_name = _safe_name(raw_name)
+    app_dir = (GENERATED_APPS_DIR / app_name).resolve()
+    if GENERATED_APPS_DIR not in app_dir.parents:
+        raise HTTPException(status_code=400, detail="Invalid app target")
+
+    files = {
+        "index.html": """<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>JARVIS App</title>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <main class="shell">
+      <p class="eyebrow">Sypher Industries</p>
+      <h1>JARVIS Generated Interface</h1>
+      <p id="brief">Operational prototype scaffolded by JARVIS.</p>
+      <button id="action">Run diagnostic</button>
+      <pre id="output"></pre>
+    </main>
+    <script src="app.js"></script>
+  </body>
+</html>
+""",
+        "style.css": """* { box-sizing: border-box; }
+body {
+  margin: 0;
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  background: #081019;
+  color: #d9fbff;
+  font-family: Inter, system-ui, sans-serif;
+}
+.shell {
+  width: min(760px, calc(100vw - 32px));
+  border: 1px solid rgba(34, 211, 238, 0.35);
+  padding: 32px;
+  background: rgba(2, 6, 23, 0.88);
+}
+.eyebrow {
+  color: #22d3ee;
+  text-transform: uppercase;
+  letter-spacing: 0.18em;
+  font-size: 12px;
+}
+h1 { margin: 8px 0 12px; font-size: clamp(32px, 7vw, 68px); }
+button {
+  margin-top: 20px;
+  border: 1px solid #22d3ee;
+  background: transparent;
+  color: #67e8f9;
+  padding: 12px 16px;
+  cursor: pointer;
+}
+pre { min-height: 80px; color: #86efac; white-space: pre-wrap; }
+""",
+        "app.js": """const output = document.querySelector('#output');
+document.querySelector('#action').addEventListener('click', () => {
+  output.textContent = [
+    'Diagnostic complete.',
+    `Timestamp: ${new Date().toLocaleString()}`,
+    'Status: prototype ready'
+  ].join('\\n');
+});
+""",
+        "README.md": f"# {app_name}\n\nStatic app scaffolded by JARVIS Operator.\n\nOpen `index.html` in a browser.\n",
+    }
+
+    if not dry_run:
+        app_dir.mkdir(parents=True, exist_ok=True)
+        for filename, content in files.items():
+            (app_dir / filename).write_text(content, encoding="utf-8")
+    return {
+        "app_name": app_name,
+        "path": str(app_dir.relative_to(WORKSPACE_ROOT)),
+        "files": sorted(files),
+        "created": not dry_run,
+    }
+
+
+async def execute_operator_command(command: str, dry_run: bool = False) -> Dict[str, Any]:
+    lowered = command.lower().strip()
+    if any(phrase in lowered for phrase in ["system status", "system state", "diagnostics", "how is the system"]):
+        data = _system_snapshot()
+        return {
+            "handled": True,
+            "intent": "system_status",
+            "response": (
+                f"System is online. CPU {data['cpu_percent']}%, memory {data['memory_percent']}%, "
+                f"disk {data['disk_percent']}%."
+            ),
+            "data": data,
+        }
+
+    if lowered.startswith(("list files", "show files", "scan workspace", "list workspace")):
+        path_match = re.search(r"(?:in|under|inside)\s+(.+)$", command, re.IGNORECASE)
+        data = _list_workspace(path_match.group(1).strip() if path_match else None)
+        names = ", ".join(item["name"] for item in data.get("entries", [])[:12])
+        return {
+            "handled": True,
+            "intent": "list_workspace",
+            "response": f"Workspace scan complete for {data['path']}. {names or 'No entries found.'}",
+            "data": data,
+        }
+
+    if lowered.startswith(("open ", "launch ", "start ")):
+        data = _open_allowed_app(command, dry_run=dry_run)
+        return {
+            "handled": True,
+            "intent": "open_app",
+            "response": f"{'Ready to launch' if dry_run else 'Launched'} {data['app']}, Sir.",
+            "data": data,
+        }
+
+    if any(phrase in lowered for phrase in ["create app", "build app", "scaffold app", "make app"]):
+        data = _create_static_app(command, dry_run=dry_run)
+        return {
+            "handled": True,
+            "intent": "create_static_app",
+            "response": f"Created static app {data['app_name']} at {data['path']}.",
+            "data": data,
+        }
+
+    return {"handled": False, "intent": "chat", "response": None, "data": {}}
 
 
 # ── LLM Chat Helper ─────────────────────────────────────────────────────────
@@ -166,6 +399,9 @@ async def login(req: LoginRequest):
     face_confidence = 0.0
     face_box = None  # {x, y, w, h} for frontend to draw rectangle
     verification_method = req.method
+
+    if req.method in {"camera_unavailable", "production_bypass"} and not req.image:
+        verification_method = "camera_unavailable_bypass"
 
     if req.image:
         try:
@@ -283,17 +519,22 @@ async def login(req: LoginRequest):
     }
     SESSION_TOKENS[token] = user_data
 
-    await db.sessions.insert_one({
-        "token": token,
-        "user_id": "shrey_ceo",
-        "login_time": datetime.now(timezone.utc).isoformat(),
-        "method": verification_method,
-        "face_detected": face_detected,
-    })
+    try:
+        await db.sessions.insert_one({
+            "token": token,
+            "user_id": "shrey_ceo",
+            "login_time": datetime.now(timezone.utc).isoformat(),
+            "method": verification_method,
+            "face_detected": face_detected,
+        })
+    except Exception as e:
+        logger.warning(f"Session persistence unavailable, continuing with in-memory token: {e}")
 
     message = "Biometric verification complete. Welcome back, Sir."
     if face_detected:
         message = f"Face recognized (confidence: {face_confidence:.0%}). Welcome back, Sir."
+    elif verification_method == "camera_unavailable_bypass":
+        message = "Camera offline. Production bypass authorized. Welcome back, Sir."
 
     return {
         "success": True,
@@ -455,19 +696,63 @@ async def process_command(req: CommandRequest, user=Depends(verify_token)):
         raise HTTPException(status_code=400, detail="No command provided")
 
     session_id = req.session_id or "main"
-    response = await jarvis_chat(command, session_id=session_id)
+    operator_result = await execute_operator_command(command)
+    if operator_result["handled"]:
+        response = operator_result["response"]
+        intent = operator_result["intent"]
+        source = "operator"
+    else:
+        response = await jarvis_chat(command, session_id=session_id)
+        intent = "chat"
+        source = "llm"
 
     # Save to conversation history
-    await db.conversations.insert_one({
-        "user_id": user["user_id"],
-        "command": command,
-        "response": response,
-        "timestamp": datetime.now(timezone.utc).isoformat(),
-        "session_id": session_id,
-    })
+    try:
+        await db.conversations.insert_one({
+            "user_id": user["user_id"],
+            "command": command,
+            "response": response,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "session_id": session_id,
+            "intent": intent,
+            "source": source,
+        })
+    except Exception as e:
+        logger.warning(f"Conversation persistence unavailable: {e}")
 
     return {
         "response": response,
+        "intent": intent,
+        "source": source,
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+    }
+
+
+@app.post("/api/operator/execute")
+async def operator_execute(req: OperatorRequest, user=Depends(verify_token)):
+    """Execute safe local operator actions for JARVIS/FRIDAY style control."""
+    command = req.command.strip()
+    if not command:
+        raise HTTPException(status_code=400, detail="No command provided")
+
+    result = await execute_operator_command(command, dry_run=req.dry_run)
+    if not result["handled"]:
+        result["response"] = await jarvis_chat(command, session_id=req.session_id or "operator")
+
+    try:
+        await db.operator_actions.insert_one({
+            "user_id": user["user_id"],
+            "command": command,
+            "intent": result["intent"],
+            "handled": result["handled"],
+            "dry_run": req.dry_run,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+        })
+    except Exception as e:
+        logger.warning(f"Operator action persistence unavailable: {e}")
+
+    return {
+        **result,
         "timestamp": datetime.now(timezone.utc).isoformat(),
     }
 
@@ -585,7 +870,8 @@ async def system_status(user=Depends(verify_token)):
         "uptime_seconds": int((datetime.now(timezone.utc) - APP_START_TIME).total_seconds()),
         "skills": [
             "chat", "code_assist", "system_metrics", "weather",
-            "file_management", "developer_mode"
+            "file_management", "developer_mode", "operator_control",
+            "app_scaffolding", "voice_commands"
         ],
     }
 
@@ -612,3 +898,13 @@ async def llm_status():
             "base_url": OLLAMA_BASE_URL,
         },
     }
+
+
+if __name__ == "__main__":
+    import uvicorn
+
+    uvicorn.run(
+        "server:app",
+        host=os.environ.get("JARVIS_HOST", "0.0.0.0"),
+        port=int(os.environ.get("JARVIS_BACKEND_PORT", "8001")),
+    )

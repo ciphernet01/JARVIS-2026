@@ -19,6 +19,8 @@ User had an existing Python JARVIS AI assistant project (Flask-based, static HTM
   - JetBrains Mono + Azeret Mono typography
 - **Database**: MongoDB (local)
 
+Only the React `3000` + FastAPI `8001` web stack is active. The older Flask/static dashboard is legacy and should not be used for new work.
+
 ## User Personas
 - **Primary**: Developer/power user ("Sir") who wants an AI coding assistant with Iron Man aesthetics
 

@@ -1,5 +1,29 @@
 # JARVIS AI Assistant - Modern Modular Architecture
 
+## Canonical Web Stack
+
+J.A.R.V.I.S uses one active web setup:
+
+- Frontend: React on `http://localhost:3000`
+- Backend: FastAPI on `http://localhost:8001`
+
+Run the backend:
+
+```powershell
+cd backend
+uvicorn server:app --host 0.0.0.0 --port 8001
+```
+
+Run the frontend:
+
+```powershell
+cd frontend
+$env:REACT_APP_BACKEND_URL="http://localhost:8001"
+npm start
+```
+
+The older Flask/static dashboard files are legacy only. Use the React/FastAPI stack above for active development.
+
 ## Overview
 
 This is the modernized, production-ready version of JARVIS with a clean modular architecture, separating concerns into distinct, testable components.

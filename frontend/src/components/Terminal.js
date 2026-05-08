@@ -72,7 +72,7 @@ export default function Terminal({ api, token }) {
     setProcessing(true);
 
     try {
-      const resp = await fetch(`${api}/api/command`, {
+      const resp = await fetch(`${api}/api/operator/execute`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'X-JARVIS-TOKEN': token },
         body: JSON.stringify({ command: cmd }),
@@ -81,7 +81,8 @@ export default function Terminal({ api, token }) {
       if (data.error) {
         setMessages(prev => [...prev, { type: 'error', text: data.error || data.detail }]);
       } else {
-        setMessages(prev => [...prev, { type: 'jarvis', text: data.response }]);
+        const prefix = data.source === 'operator' || data.handled ? '[OPERATOR] ' : '';
+        setMessages(prev => [...prev, { type: 'jarvis', text: `${prefix}${data.response}` }]);
         speak(data.response);
       }
     } catch (e) {
@@ -141,7 +142,7 @@ export default function Terminal({ api, token }) {
         ))}
         {processing && (
           <div className="text-cyan-400/50">
-            <span className="animate-typing-cursor">_</span> Accessing Neural Net...
+            <span className="animate-typing-cursor">_</span> Routing command...
           </div>
         )}
       </div>

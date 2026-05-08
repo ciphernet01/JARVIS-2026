@@ -183,17 +183,18 @@ def main():
 
         # Run based on mode
         if args.mode == "web":
-            logger.info("Starting JARVIS Web API Dashboard...")
-            # Import and run the Flask server
-            from api_server import app
-            # Clean up default Assistant instance since api_server spins its own
+            logger.info("Starting JARVIS FastAPI backend...")
             PersistenceFactory.shutdown(persistence_components)
-            debug_mode = os.getenv("JARVIS_DEBUG", "0").lower() in {"1", "true", "yes"}
+            import uvicorn
+
+            host = os.getenv("JARVIS_HOST", "0.0.0.0")
+            port = int(os.getenv("JARVIS_BACKEND_PORT", "8001"))
             print("\n" + "=" * 55)
-            print("  JARVIS Host is now routing to the WEB Dashboard")
-            print("  Open -> http://localhost:5000")
+            print("  JARVIS Backend API is online")
+            print(f"  API      -> http://localhost:{port}")
+            print("  Frontend -> http://localhost:3000")
             print("=" * 55 + "\n")
-            app.run(host="0.0.0.0", port=int(os.getenv("JARVIS_PORT", "5000")), debug=debug_mode)
+            uvicorn.run("backend.server:app", host=host, port=port)
         else:
             assistant.interactive_mode()
 

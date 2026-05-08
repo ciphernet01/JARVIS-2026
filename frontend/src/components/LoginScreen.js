@@ -12,8 +12,6 @@ export default function LoginScreen({ onLogin, api }) {
   const [faceInfo, setFaceInfo] = useState(null);
   const videoRef = useRef(null);
   const streamRef = useRef(null);
-  const canvasRef = useRef(null);
-
   useEffect(() => {
     initCamera();
     return () => {
@@ -33,7 +31,7 @@ export default function LoginScreen({ onLogin, api }) {
       setStatus('NEURAL LINK ESTABLISHED. CAMERA ONLINE.');
     } catch (err) {
       setCameraError(err.message);
-      setStatus('CAMERA OFFLINE. FALLBACK MODE AVAILABLE.');
+      setStatus('CAMERA OFFLINE. PRODUCTION BYPASS READY.');
     }
   };
 
@@ -57,18 +55,21 @@ export default function LoginScreen({ onLogin, api }) {
 
   const startScan = async () => {
     setScanning(true);
-    setStatus('SCANNING BIOMETRICS...');
+    setStatus(cameraActive ? 'SCANNING BIOMETRICS...' : 'CAMERA OFFLINE. AUTHORIZING PRODUCTION BYPASS...');
     setFaceInfo(null);
     setFaceBox(null);
 
     const imageData = captureFrame();
-    await new Promise(r => setTimeout(r, 1500));
+    await new Promise(r => setTimeout(r, cameraActive ? 1500 : 600));
 
     try {
       const resp = await fetch(`${api}/api/auth/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ method: 'biometric', image: imageData }),
+        body: JSON.stringify({
+          method: imageData ? 'biometric' : 'camera_unavailable',
+          image: imageData,
+        }),
       });
       const data = await resp.json();
 
@@ -79,7 +80,7 @@ export default function LoginScreen({ onLogin, api }) {
       if (data.success) {
         setStatus('ACCESS GRANTED');
         setGranted(true);
-        setFaceInfo({ detected: true, confidence: data.confidence });
+        setFaceInfo({ detected: data.face_detected, confidence: data.confidence });
         if (streamRef.current) {
           streamRef.current.getTracks().forEach(t => t.stop());
         }
@@ -152,7 +153,7 @@ export default function LoginScreen({ onLogin, api }) {
                 <>
                   <AlertTriangle className="w-10 h-10 text-amber-400/60 mb-2" />
                   <span className="text-[9px] text-amber-400/60 font-mono">CAMERA OFFLINE</span>
-                  <span className="text-[8px] text-amber-400/40 font-mono mt-1">Grant camera permission</span>
+                  <span className="text-[8px] text-amber-400/40 font-mono mt-1">Production bypass available</span>
                 </>
               ) : (
                 <>
@@ -257,7 +258,7 @@ export default function LoginScreen({ onLogin, api }) {
             className="px-8 py-3 border border-cyan-500/60 text-cyan-400 font-display text-xs tracking-[0.2em] uppercase hover:bg-cyan-950/40 hover:border-cyan-400 transition-all duration-200"
             data-testid="login-scan-button"
           >
-            {cameraActive ? 'Initialize Bio-Scan' : 'Bypass Authentication'}
+            {cameraActive ? 'Initialize Bio-Scan' : 'Enter JARVIS'}
           </motion.button>
         )}
 
@@ -270,7 +271,9 @@ export default function LoginScreen({ onLogin, api }) {
 
         {/* Reference info */}
         <p className="mt-4 font-mono text-[8px] text-cyan-900/60">
-          Matching against: imagedata/ folder + enrolled profiles
+          {cameraActive
+            ? 'Matching against: imagedata/ folder + enrolled profiles'
+            : 'Camera unavailable: secured local production bypass'}
         </p>
       </motion.div>
     </div>
