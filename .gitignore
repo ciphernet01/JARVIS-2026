@@ -1,21 +1,30 @@
 # JARVIS Core - Security Policy
-# ------------------------------
 # Prevent secret leakage and telemetry bloat
 
-# Secrets & Sessions
+# Secrets and sessions
 .env
+.env.*
+*.env
 .session_token
+credentials.json
+*.pem
 *.key
 *.cert
+.credentials
 
-# Compiled & Caches
+# Python compiled files and caches
 __pycache__/
 *.py[cod]
 *$py.class
 .pytest_cache/
 .mypy_cache/
 
-# Local Data & Telemetry
+# Frontend dependencies and build output
+node_modules/
+frontend/node_modules/
+frontend/build/
+
+# Local data and telemetry
 *.log
 *.db
 *.sqlite
@@ -23,7 +32,7 @@ imagedata/
 data/
 logs/
 
-# Binary & OS
+# Binary and OS files
 .DS_Store
 Thumbs.db
 *.exe
@@ -36,48 +45,3 @@ Thumbs.db
 *.test
 debug_*.py
 test_*_final.py
--e 
-# Environment and credential files
-.env
-.env.*
-*.env
-credentials.json
-*.pem
-*.key
-.credentials
--e 
-# Environment and credential files
-.env
-.env.*
-*.env
-credentials.json
-*.pem
-*.key
-.credentials
--e 
-# Environment and credential files
-.env
-.env.*
-*.env
-credentials.json
-*.pem
-*.key
-.credentials
--e 
-# Environment and credential files
-.env
-.env.*
-*.env
-credentials.json
-*.pem
-*.key
-.credentials
--e 
-# Environment and credential files
-.env
-.env.*
-*.env
-credentials.json
-*.pem
-*.key
-.credentials
