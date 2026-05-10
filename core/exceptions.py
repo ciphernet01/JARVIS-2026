@@ -36,3 +36,8 @@ class IntegrationError(JARVISException):
 class PermissionError(JARVISException):
     """Raised when user lacks permission for action"""
     pass
+
+
+class AgentError(JARVISException):
+    """Raised when the ReAct agent loop encounters an error"""
+    pass

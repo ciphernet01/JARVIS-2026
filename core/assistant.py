@@ -3,13 +3,26 @@ Main JARVIS Assistant Class
 Orchestrates all modules and manages the conversation flow
 """
 
+import asyncio
 import logging
 from datetime import datetime
 from typing import Any, Callable, Dict, Optional
 
 from .config import ConfigManager
+from .llm_router import LLMRouter
+from .agent import ReActAgent
 from modules.memory import MemoryManager
 from modules.agent import AgentManager
+from modules.tools import (
+    run_shell,
+    write_file,
+    read_file,
+    list_directory,
+    run_python,
+    run_node,
+    search_web,
+    fetch_url,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -55,6 +68,29 @@ class Assistant:
             skill_registry=self.skill_registry,
             persistence_components=self.persistence,
         ) if self.llm_manager and self.skill_registry else None
+
+        # New ReAct agent loop (priority path per copilot instructions)
+        self.llm_router: Optional[LLMRouter] = None
+        self.react_agent: Optional[ReActAgent] = None
+        if getattr(self.config, "llm", None) and self.config.llm.enabled:
+            try:
+                self.llm_router = LLMRouter(self.config)
+                self.react_agent = ReActAgent(
+                    llm_router=self.llm_router,
+                    tools={
+                        "run_shell": run_shell,
+                        "write_file": write_file,
+                        "read_file": read_file,
+                        "list_directory": list_directory,
+                        "run_python": run_python,
+                        "run_node": run_node,
+                        "search_web": search_web,
+                        "fetch_url": fetch_url,
+                    },
+                )
+                logger.info("ReActAgent initialized with tool suite")
+            except Exception as exc:
+                logger.warning(f"ReActAgent initialization failed: {exc}")
 
         self.is_running = False
         self.conversation_history: list = []
@@ -142,6 +178,50 @@ class Assistant:
         except Exception as e:
             logger.warning(f"Failed to save conversation: {e}")
 
+    def _run_agent_sync(self, user_input: str, context: Dict[str, Any]) -> str:
+        """Run the async ReAct agent safely from a sync context."""
+        if not self.react_agent:
+            raise RuntimeError("ReActAgent not initialized")
+        try:
+            result = asyncio.run(self.react_agent.run(user_input, context))
+            return result.answer
+        except RuntimeError:
+            # Already inside a running event loop (e.g., Jupyter, FastAPI)
+            import concurrent.futures
+            with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+                future = executor.submit(asyncio.run, self.react_agent.run(user_input, context))
+                return future.result().answer
+
+    async def process_query_async(self, user_input: str) -> str:
+        """Async entry point for the ReAct agent (used by FastAPI, etc.)."""
+        self._log_conversation("user", user_input)
+        logger.info(f"User input: {user_input}")
+
+        if self.memory:
+            self.memory.set_current_user(self.current_user_id)
+            self.user_context["memory_context"] = self.memory.build_context_block()
+
+        context = self._build_llm_context(user_input)
+
+        if self.react_agent:
+            try:
+                result = await self.react_agent.run(user_input, context)
+                response = result.answer
+                self._log_conversation("assistant", response)
+                self._save_conversation_to_persistence(
+                    user_input,
+                    response,
+                    intent="agent",
+                    confidence=1.0,
+                    skill_used="react_agent",
+                )
+                return response
+            except Exception as exc:
+                logger.warning(f"ReActAgent failed, falling back to legacy paths: {exc}")
+
+        # Fallback to legacy sync paths wrapped for async callers
+        return self._process_input(user_input)
+
     def _process_input(
         self,
         user_input: str,
@@ -150,16 +230,9 @@ class Assistant:
         skill_used: Optional[str] = None,
     ) -> str:
         """
-        Process user input and generate response
+        Process user input and generate response.
 
-        Args:
-            user_input: User's command or query
-            intent: Recognized intent
-            confidence: Intent confidence score
-            skill_used: Name of skill that handled query
-
-        Returns:
-            Response text
+        Priority: ReAct agent loop → legacy agent workflow → legacy LLM manager → skill registry.
         """
         self._log_conversation("user", user_input)
         logger.info(f"User input: {user_input}")
@@ -170,6 +243,23 @@ class Assistant:
 
         llm_context = self._build_llm_context(user_input)
 
+        # Priority path: ReAct agent loop (per copilot instructions)
+        if self.react_agent:
+            try:
+                response = self._run_agent_sync(user_input, llm_context)
+                self._log_conversation("assistant", response)
+                self._save_conversation_to_persistence(
+                    user_input,
+                    response,
+                    intent="agent",
+                    confidence=1.0,
+                    skill_used="react_agent",
+                )
+                return response
+            except Exception as exc:
+                logger.warning(f"ReActAgent failed, falling back to legacy paths: {exc}")
+
+        # Legacy multi-step workflow path
         if self.agent_manager and self.agent_manager.should_plan(user_input):
             try:
                 plan = self.agent_manager.build_plan(user_input, llm_context)
@@ -187,6 +277,7 @@ class Assistant:
             except Exception as exc:
                 logger.warning(f"Agent workflow failed, falling back to single-step handling: {exc}")
 
+        # Legacy LLM + skill registry path
         if self.llm_manager:
             plan = self.llm_manager.decide_action(user_input, llm_context) or {}
             plan_type = (plan.get("type") or "answer").lower()
@@ -225,6 +316,7 @@ class Assistant:
                 self.memory.set_current_user(self.current_user_id)
             return response
 
+        # Last resort: keyword skill registry
         if not self.skill_registry:
             response = "Skill registry not available"
         else:
@@ -403,6 +495,8 @@ class Assistant:
             "memory_enabled": self.memory is not None,
             "llm_enabled": self.llm_manager is not None,
             "agent_enabled": self.agent_manager is not None,
+            "react_agent_enabled": self.react_agent is not None,
+            "llm_router_enabled": self.llm_router is not None,
         }
 
     def set_current_user(self, user_id: str) -> None:

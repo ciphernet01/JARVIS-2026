@@ -20,6 +20,7 @@ from .integration_skills import (
     OpenLinkSkill,
 )
 from .news import NewsSkill
+from .builder import BuilderSkill
 from .factory import SkillFactory
 
 __all__ = [
@@ -38,5 +39,6 @@ __all__ = [
     "CalendarSkill",
     "EmailSkill",
     "NewsSkill",
+    "BuilderSkill",
     "SkillFactory",
 ]
