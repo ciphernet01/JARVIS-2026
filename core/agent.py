@@ -228,11 +228,14 @@ class ReActAgent:
         Returns:
             AgentResult with the final answer and step history.
         """
+        # Build explicit tool list for the prompt
+        tool_list = ", ".join([f"`{name}`" for name in self.tools.keys()])
         system_prompt = (
-            "You are JARVIS, an autonomous AI agent. You have access to tools. "
-            "When you need to act, call the appropriate tool with valid JSON arguments. "
-            "When you have the final answer, respond directly to the user. "
-            "Think step by step. Do not call tools unless necessary."
+            "You are JARVIS, an autonomous AI agent. You have access to these specific tools: "
+            f"{tool_list}. "
+            "When you need to act, call one of these exact tools with valid JSON arguments. "
+            "Do NOT make up tool names. Only use the tools listed above. "
+            "When you have the final answer, respond directly to the user without calling tools."
         )
 
         messages: List[Dict[str, str]] = [

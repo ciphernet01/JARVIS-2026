@@ -285,6 +285,98 @@ class GroqClient:
         raise NotImplementedError("Groq embedding not available")
 
 
+class XAIClient:
+    """Async xAI (Grok) client using OpenAI-compatible API."""
+
+    def __init__(
+        self,
+        api_key: Optional[str] = None,
+        model: str = "grok-beta",
+        temperature: float = 0.2,
+        top_p: float = 0.9,
+        timeout_seconds: int = 30,
+        system_prompt: Optional[str] = None,
+    ):
+        self.api_key = api_key or os.getenv("XAI_API_KEY")
+        self.model_name = model
+        self.temperature = temperature
+        self.top_p = top_p
+        self.timeout_seconds = timeout_seconds
+        self.system_prompt = system_prompt or (
+            "You are JARVIS. Be concise, expert-level, and proactive."
+        )
+        self._client: Optional[AsyncOpenAI] = None
+
+    def _ensure_client(self) -> AsyncOpenAI:
+        if self._client is None:
+            if not self.api_key:
+                raise ConfigurationError("XAI_API_KEY not set")
+            self._client = AsyncOpenAI(
+                base_url="https://api.x.ai/v1",
+                api_key=self.api_key,
+                timeout=self.timeout_seconds,
+            )
+        return self._client
+
+    async def chat(
+        self,
+        messages: List[Dict[str, str]],
+        tools: Optional[List[Dict[str, Any]]] = None,
+    ) -> LLMResponse:
+        client = self._ensure_client()
+        start = time.time()
+        try:
+            payload: Dict[str, Any] = {
+                "model": self.model_name,
+                "messages": messages,
+                "temperature": self.temperature,
+                "top_p": self.top_p,
+            }
+            if tools:
+                payload["tools"] = tools
+                payload["tool_choice"] = "auto"
+
+            response = await client.chat.completions.create(**payload)
+
+            latency = (time.time() - start) * 1000
+            choice = response.choices[0]
+            message = choice.message
+            content = (message.content or "").strip()
+            tool_calls = []
+            if message.tool_calls:
+                for tc in message.tool_calls:
+                    tool_calls.append(
+                        {
+                            "name": tc.function.name,
+                            "arguments": tc.function.arguments,
+                        }
+                    )
+
+            tokens = response.usage.total_tokens if response.usage else None
+
+            return LLMResponse(
+                content=content,
+                tool_calls=tool_calls,
+                model_used=self.model_name,
+                provider="xai",
+                call_log=LLMCallLog(
+                    model=self.model_name,
+                    provider="xai",
+                    latency_ms=latency,
+                    tokens_used=tokens,
+                    success=True,
+                ),
+            )
+        except Exception as exc:
+            latency = (time.time() - start) * 1000
+            err_msg = str(exc)
+            logger.warning(f"xAI chat failed: {err_msg}")
+            raise
+
+    async def embed(self, text: str) -> List[float]:
+        raise NotImplementedError("xAI embedding not available")
+
+
 class OllamaClient:
     """Async Ollama client using OpenAI-compatible /v1 endpoint."""
 
@@ -402,6 +494,7 @@ class LLMRouter:
 
         gemini_api_key = getattr(llm_cfg, "api_key", None) or cfg.get_api_key("gemini") or os.getenv("GEMINI_API_KEY")
         groq_api_key = cfg.get_api_key("groq") or os.getenv("GROQ_API_KEY")
+        xai_api_key = cfg.get_api_key("xai") or os.getenv("XAI_API_KEY")
         ollama_base = getattr(llm_cfg, "base_url", "http://localhost:11434/v1")
         temperature = getattr(llm_cfg, "temperature", 0.2)
         top_p = getattr(llm_cfg, "top_p", 0.9)
@@ -427,6 +520,14 @@ class LLMRouter:
         self.groq = GroqClient(
             api_key=groq_api_key,
             model="llama-3.3-70b-versatile",
+            temperature=temperature,
+            top_p=top_p,
+            timeout_seconds=timeout,
+            system_prompt=system_prompt,
+        )
+        self.xai = XAIClient(
+            api_key=xai_api_key,
+            model="grok-beta",
             temperature=temperature,
             top_p=top_p,
             timeout_seconds=timeout,
@@ -497,9 +598,10 @@ class LLMRouter:
         messages: List[Dict[str, str]],
         tools: Optional[List[Dict[str, Any]]] = None,
     ) -> LLMResponse:
-        """Code generation / build tasks → Gemini 2.5 Pro, fallback Groq → Ollama."""
+        """Code generation / build tasks → Gemini 2.5 Pro, fallback xAI/Grok → Groq → Ollama."""
         providers = [
             (self.gemini_pro, "Gemini Pro"),
+            (self.xai, "xAI Grok"),
             (self.groq, "Groq"),
             (self.ollama_coder, "Ollama qwen2.5-coder"),
         ]
@@ -510,9 +612,10 @@ class LLMRouter:
         messages: List[Dict[str, str]],
         tools: Optional[List[Dict[str, Any]]] = None,
     ) -> LLMResponse:
-        """Quick rewrites / summaries → Gemini 2.0 Flash, fallback Groq → Ollama."""
+        """Quick rewrites / summaries → Gemini 2.0 Flash, fallback xAI/Grok → Groq → Ollama."""
         providers = [
             (self.gemini_flash, "Gemini Flash"),
+            (self.xai, "xAI Grok"),
             (self.groq, "Groq"),
             (self.ollama_general, "Ollama mistral"),
         ]
@@ -523,9 +626,10 @@ class LLMRouter:
         messages: List[Dict[str, str]],
         tools: Optional[List[Dict[str, Any]]] = None,
     ) -> LLMResponse:
-        """Voice / real-time response → Groq (speed priority), fallback Gemini Flash → Ollama."""
+        """Voice / real-time response → Groq (speed priority), fallback xAI/Grok → Gemini Flash → Ollama."""
         providers = [
             (self.groq, "Groq"),
+            (self.xai, "xAI Grok"),
             (self.gemini_flash, "Gemini Flash"),
             (self.ollama_general, "Ollama mistral"),
         ]

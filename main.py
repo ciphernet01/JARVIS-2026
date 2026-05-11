@@ -9,6 +9,13 @@ import argparse
 import os
 from pathlib import Path
 
+# Load environment variables from .env first (before any LLM imports)
+from dotenv import load_dotenv
+
+project_env = Path(__file__).resolve().parent / ".env"
+if project_env.exists():
+    load_dotenv(project_env, override=True)
+
 # Add jarvis-core to path
 sys.path.insert(0, str(Path(__file__).parent))
 
@@ -92,9 +99,9 @@ def main():
     parser = argparse.ArgumentParser(description="JARVIS AI Assistant")
     parser.add_argument(
         "--mode",
-        choices=["web"],
-        default="web",
-        help="Running mode (web = web dashboard)",
+        choices=["interactive", "web"],
+        default="interactive",
+        help="Running mode (interactive = CLI, web = FastAPI backend)",
     )
     parser.add_argument(
         "--config",

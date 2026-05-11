@@ -19,6 +19,9 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+# Ensure core module is importable
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
 from fastapi import FastAPI, HTTPException, Request, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
@@ -27,6 +30,10 @@ from motor.motor_asyncio import AsyncIOMotorClient
 import cv2
 
 load_dotenv()
+
+# Import new JARVIS core
+from core import ConfigManager, Assistant
+from modules.skills import SkillFactory
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
@@ -64,6 +71,26 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# ── Initialize JARVIS Core (ReActAgent + LLMRouter) ─────────────────────────
+_jarvis_assistant: Optional[Assistant] = None
+
+
+def _get_assistant() -> Assistant:
+    global _jarvis_assistant
+    if _jarvis_assistant is None:
+        try:
+            config = ConfigManager()
+            skill_registry = SkillFactory.create_default_registry()
+            _jarvis_assistant = Assistant(
+                config_manager=config,
+                skill_registry=skill_registry,
+            )
+            _jarvis_assistant.set_current_user("shrey_ceo")
+            logger.info("JARVIS Assistant initialized with ReActAgent")
+        except Exception as exc:
+            logger.warning(f"Failed to initialize JARVIS Assistant: {exc}")
+    return _jarvis_assistant
 
 
 # ── Models ───────────────────────────────────────────────────────────────────
@@ -434,35 +461,20 @@ def execute_task(task: JarvisTask) -> JarvisTask:
 
 # ── LLM Chat Helper ─────────────────────────────────────────────────────────
 async def jarvis_chat(prompt: str, system_message: str = None, session_id: str = "default") -> str:
-    """Chat with Gemini, then local Ollama, then deterministic fallback."""
-    try:
-        from emergentintegrations.llm.chat import LlmChat, UserMessage
+    """Route through JARVIS ReActAgent (Gemini → xAI → Groq → Ollama fallback)."""
+    assistant = _get_assistant()
+    if assistant and assistant.react_agent:
+        try:
+            response = await assistant.process_query_async(prompt)
+            return response
+        except Exception as exc:
+            logger.warning(f"ReActAgent failed in web backend: {exc}")
 
-        if not system_message:
-            system_message = (
-                "You are JARVIS, an advanced AI assistant created by Sypher Industries. "
-                "Your creator and CEO is Sir. You are deeply knowledgeable, witty with dry British humor, "
-                "proactive, and fiercely loyal. You address the user as 'Sir' and provide concise, "
-                "expert-level responses. You have expertise in software development, system administration, "
-                "AI/ML engineering, and general knowledge. Keep responses focused and actionable."
-            )
-
-        chat = LlmChat(
-            api_key=EMERGENT_LLM_KEY,
-            session_id=f"jarvis-{session_id}",
-            system_message=system_message,
-        )
-        chat.with_model("gemini", "gemini-2.5-flash")
-
-        user_message = UserMessage(text=prompt)
-        response = await chat.send_message(user_message)
-        return response
-    except Exception as e:
-        logger.error(f"Gemini chat error: {e}")
-        ollama_response = _ollama_chat(prompt, system_message=system_message)
-        if ollama_response:
-            return ollama_response
-        return _offline_chat_response(prompt)
+    # Legacy fallback
+    ollama_response = _ollama_chat(prompt, system_message=system_message)
+    if ollama_response:
+        return ollama_response
+    return _offline_chat_response(prompt)
 
 
 async def jarvis_code_assist(prompt: str, repo_context: str = None, language: str = "python") -> str:
@@ -801,21 +813,42 @@ async def vscode_status(user=Depends(verify_token)):
 
 @app.post("/api/command")
 async def process_command(req: CommandRequest, user=Depends(verify_token)):
-    """Process a command through JARVIS AI"""
+    """Process a command through JARVIS AI (ReActAgent primary, operator fallback)"""
     command = req.command.strip()
     if not command:
         raise HTTPException(status_code=400, detail="No command provided")
 
     session_id = req.session_id or "main"
-    operator_result = await execute_operator_command(command)
-    if operator_result["handled"]:
-        response = operator_result["response"]
-        intent = operator_result["intent"]
-        source = "operator"
+
+    # Priority 1: ReActAgent with tool calling (the brain)
+    assistant = _get_assistant()
+    if assistant and assistant.react_agent:
+        try:
+            response = await assistant.process_query_async(command)
+            intent = "agent"
+            source = "react_agent"
+        except Exception as exc:
+            logger.warning(f"ReActAgent failed in command endpoint: {exc}")
+            # Fall back to operator commands for system-level tasks
+            operator_result = await execute_operator_command(command)
+            if operator_result["handled"]:
+                response = operator_result["response"]
+                intent = operator_result["intent"]
+                source = "operator"
+            else:
+                response = await jarvis_chat(command, session_id=session_id)
+                intent = "chat"
+                source = "llm"
     else:
-        response = await jarvis_chat(command, session_id=session_id)
-        intent = "chat"
-        source = "llm"
+        operator_result = await execute_operator_command(command)
+        if operator_result["handled"]:
+            response = operator_result["response"]
+            intent = operator_result["intent"]
+            source = "operator"
+        else:
+            response = await jarvis_chat(command, session_id=session_id)
+            intent = "chat"
+            source = "llm"
 
     # Save to conversation history
     try:

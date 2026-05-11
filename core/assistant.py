@@ -183,14 +183,30 @@ class Assistant:
         if not self.react_agent:
             raise RuntimeError("ReActAgent not initialized")
         try:
+            # Check if an event loop is already running
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            # No loop running - safe to use asyncio.run
+            loop = None
+
+        if loop is None:
             result = asyncio.run(self.react_agent.run(user_input, context))
             return result.answer
-        except RuntimeError:
-            # Already inside a running event loop (e.g., Jupyter, FastAPI)
-            import concurrent.futures
-            with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
-                future = executor.submit(asyncio.run, self.react_agent.run(user_input, context))
-                return future.result().answer
+
+        # Already inside a running loop (e.g., Jupyter, FastAPI) - use nest_asyncio or thread pool
+        import concurrent.futures
+        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+            def _run_in_new_loop():
+                new_loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(new_loop)
+                try:
+                    return new_loop.run_until_complete(self.react_agent.run(user_input, context))
+                finally:
+                    new_loop.close()
+
+            future = executor.submit(_run_in_new_loop)
+            result = future.result(timeout=60)
+            return result.answer
 
     async def process_query_async(self, user_input: str) -> str:
         """Async entry point for the ReAct agent (used by FastAPI, etc.)."""
