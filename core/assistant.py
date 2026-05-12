@@ -23,6 +23,12 @@ from modules.tools import (
     search_web,
     fetch_url,
 )
+from modules.tools.os_control import (
+    press_key,
+    type_text,
+    click_screen,
+    send_notification,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -86,6 +92,10 @@ class Assistant:
                         "run_node": run_node,
                         "search_web": search_web,
                         "fetch_url": fetch_url,
+                        "press_key": press_key,
+                        "type_text": type_text,
+                        "click_screen": click_screen,
+                        "send_notification": send_notification,
                     },
                 )
                 logger.info("ReActAgent initialized with tool suite")
@@ -177,6 +187,32 @@ class Assistant:
             )
         except Exception as e:
             logger.warning(f"Failed to save conversation: {e}")
+
+    def _load_history_from_persistence(self, limit: int = 15) -> None:
+        """Load recent conversation history from persistence layer."""
+        if not self.persistence or not self.current_user_id:
+            return
+
+        conversation_store = self.persistence.get("conversation_store")
+        if not conversation_store:
+            return
+
+        try:
+            # Get history (returns list of dicts with query/response/timestamp)
+            history = conversation_store.get_user_history(self.current_user_id, limit=limit)
+            if not history:
+                return
+
+            # Clear current in-memory history and rebuild from persisted data
+            # Items in DB are ordered DESC by timestamp, so we reverse them
+            self.conversation_history.clear()
+            for entry in reversed(history):
+                self._log_conversation("user", entry["query"])
+                self._log_conversation("assistant", entry["response"])
+
+            logger.info(f"Reloaded {len(self.conversation_history)} messages from persistence for {self.current_user_id}")
+        except Exception as e:
+            logger.warning(f"Failed to load conversation history: {e}")
 
     def _run_agent_sync(self, user_input: str, context: Dict[str, Any]) -> str:
         """Run the async ReAct agent safely from a sync context."""
@@ -520,6 +556,10 @@ class Assistant:
         self.current_user_id = user_id
         if self.memory:
             self.memory.set_current_user(user_id)
+        
+        # Reload history when user is set
+        self._load_history_from_persistence()
+        
         logger.info(f"Current user set to: {user_id}")
 
     def get_conversation_statistics(self) -> Optional[Dict[str, Any]]:

@@ -61,7 +61,8 @@ class GreetingSkill(Skill):
 
     @property
     def keywords(self) -> List[str]:
-        return ["hello", "hi", "hey", "greet", "good morning", "good afternoon", "good evening"]
+        # Narrow keywords to prevent interception of contextual queries
+        return ["greet user", "say hello", "formal greeting"]
 
     @property
     def description(self) -> str:

@@ -50,7 +50,7 @@ db = client[DB_NAME]
 # Emergent LLM
 EMERGENT_LLM_KEY = os.environ.get("EMERGENT_LLM_KEY")
 OLLAMA_BASE_URL = os.environ.get("OLLAMA_BASE_URL", "http://localhost:11434")
-OLLAMA_MODEL = os.environ.get("OLLAMA_MODEL", "llama3.1")
+OLLAMA_MODEL = os.environ.get("OLLAMA_MODEL", "gemma4:latest")
 
 # Session management
 SESSION_TOKENS = {}
@@ -82,12 +82,20 @@ def _get_assistant() -> Assistant:
         try:
             config = ConfigManager()
             skill_registry = SkillFactory.create_default_registry()
+            
+            # Setup persistence layer for the web backend (Absolute path)
+            db_path = Path(__file__).resolve().parent.parent / "jarvis.db"
+            db_url = f"sqlite:///{db_path}"
+            from modules.persistence import PersistenceFactory
+            persistence_components = PersistenceFactory.initialize(db_url)
+            
             _jarvis_assistant = Assistant(
                 config_manager=config,
                 skill_registry=skill_registry,
+                persistence_components=persistence_components,
             )
             _jarvis_assistant.set_current_user("shrey_ceo")
-            logger.info("JARVIS Assistant initialized with ReActAgent")
+            logger.info("JARVIS Assistant initialized with ReActAgent and Persistence")
         except Exception as exc:
             logger.warning(f"Failed to initialize JARVIS Assistant: {exc}")
     return _jarvis_assistant
@@ -367,22 +375,31 @@ def _ollama_chat(prompt: str, system_message: Optional[str] = None) -> Optional[
                 {
                     "role": "system",
                     "content": system_message or (
-                        "You are JARVIS, a concise local AI operator for Sypher Industries. "
-                        "Help with software, operating system tasks, and planning. Address the user as Sir."
+                        "You are JARVIS, an advanced AI assistant created by Sypher Industries. "
+                        "Your CEO and creator is Shrey. You are a Senior Developer and AI ML Expert. "
+                        "You can build websites, write code, debug issues, and manage systems. "
+                        "Be concise, confident, and address the user as Sir. "
+                        "When asked to build something, provide a clear plan and offer to execute it."
                     ),
                 },
                 {"role": "user", "content": prompt},
             ],
             "stream": False,
         }
-        resp = http_requests.post(f"{OLLAMA_BASE_URL}/api/chat", json=payload, timeout=45)
+        logger.info(f"Ollama chat request: model={OLLAMA_MODEL}, prompt_len={len(prompt)}")
+        resp = http_requests.post(f"{OLLAMA_BASE_URL}/api/chat", json=payload, timeout=120)
         if resp.status_code == 200:
             data = resp.json()
             content = data.get("message", {}).get("content")
             if content:
+                logger.info(f"Ollama chat success: {len(content)} chars")
                 return content.strip()
+            else:
+                logger.warning(f"Ollama returned empty content: {data}")
+        else:
+            logger.warning(f"Ollama chat HTTP {resp.status_code}: {resp.text[:200]}")
     except Exception as e:
-        logger.info(f"Ollama chat unavailable: {e}")
+        logger.warning(f"Ollama chat unavailable: {e}")
     return None
 
 
@@ -992,15 +1009,9 @@ async def weather(user=Depends(verify_token)):
 
 @app.get("/api/history")
 async def conversation_history(user=Depends(verify_token), limit: int = 30):
-    """Get conversation history"""
     try:
-        cursor = db.conversations.find(
-            {"user_id": user["user_id"]},
-            {"_id": 0}
-        ).sort("timestamp", -1).limit(limit)
-
-        history = await cursor.to_list(length=limit)
-        history.reverse()
+        assistant = _get_assistant()
+        history = assistant.get_conversation_history()[-limit:]
     except Exception as e:
         logger.warning(f"Conversation history unavailable: {e}")
         history = []
@@ -1010,15 +1021,21 @@ async def conversation_history(user=Depends(verify_token), limit: int = 30):
 @app.get("/api/status")
 async def system_status(user=Depends(verify_token)):
     """Get JARVIS system status"""
+    data = _system_snapshot()
+    
+    conv_count = 0
     try:
-        conv_count = await db.conversations.count_documents({})
+        assistant = _get_assistant()
+        stats = assistant.get_conversation_statistics()
+        if stats:
+            conv_count = stats.get("total_conversations", 0)
     except Exception as e:
         logger.warning(f"Conversation count unavailable: {e}")
-        conv_count = 0
+
     return {
         "status": "online",
-        "llm_provider": "gemini-2.5-flash",
-        "llm_available": bool(EMERGENT_LLM_KEY),
+        "llm_provider": "gemini-2.0-flash",
+        "llm_available": True, 
         "ollama_configured": bool(OLLAMA_BASE_URL),
         "conversation_count": conv_count,
         "platform": f"{platform.system()} {platform.release()}",

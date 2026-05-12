@@ -231,20 +231,38 @@ class ReActAgent:
         # Build explicit tool list for the prompt
         tool_list = ", ".join([f"`{name}`" for name in self.tools.keys()])
         system_prompt = (
-            "You are JARVIS, an autonomous AI agent. You have access to these specific tools: "
-            f"{tool_list}. "
-            "When you need to act, call one of these exact tools with valid JSON arguments. "
-            "Do NOT make up tool names. Only use the tools listed above. "
-            "When you have the final answer, respond directly to the user without calling tools."
+            "You are JARVIS, the legendary AI assistant created by Sypher Industries and your CEO, Shrey. "
+            "You are a master of systems, a senior software architect, and a proactive software operator.\n\n"
+            f"CORE TOOLS: {tool_list}.\n\n"
+            "OPERATING PROTOCOLS:\n"
+            "1. IDENTITY: Always address the user as Sir. You are confident, efficient, and sophisticated.\n"
+            "2. PROJECT AWARENESS: If you are unsure about recent projects or what you 'built recently', ALWAYS use `list_directory` to scan the workspace (especially `jarvis-workspace`) to find recent activity.\n"
+            "3. AUTONOMY: Plan your steps, execute them using tools, and verify the output before answering. Do NOT say you cannot build something; you have the tools to do it.\n"
+            "4. CONTEXT: Use the provided memory and history to maintain continuity.\n\n"
+            "If the user asks 'what did we build' or 'what is our recent project', scan the logical workspace directories to identify the project (e.g., Sales CRM Dashboard in `jarvis-workspace/sales-crm`)."
         )
 
         messages: List[Dict[str, str]] = [
             {"role": "system", "content": system_prompt},
         ]
+        
         if context:
-            messages.append(
-                {"role": "system", "content": f"Context: {json.dumps(context, default=str)}"}
-            )
+            # Add recent history if available
+            recent_history = context.get("recent_history", [])
+            for msg in recent_history:
+                # Ensure we only add valid roles
+                role = msg.get("role")
+                content = msg.get("text") or msg.get("content")
+                if role and content:
+                    messages.append({"role": role, "content": content})
+            
+            # Add other context as a dedicated system note
+            other_context = {k: v for k, v in context.items() if k != "recent_history"}
+            if other_context:
+                messages.append(
+                    {"role": "system", "content": f"System Context: {json.dumps(other_context, default=str)}"}
+                )
+
         messages.append({"role": "user", "content": query})
 
         steps: List[AgentStep] = []

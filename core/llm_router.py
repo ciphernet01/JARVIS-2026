@@ -535,7 +535,7 @@ class LLMRouter:
         )
         self.ollama_coder = OllamaClient(
             base_url=ollama_base,
-            model="qwen2.5-coder:7b",
+            model=os.getenv("OLLAMA_MODEL", "gemma4:latest"),
             temperature=temperature,
             top_p=top_p,
             timeout_seconds=timeout,
@@ -543,7 +543,7 @@ class LLMRouter:
         )
         self.ollama_general = OllamaClient(
             base_url=ollama_base,
-            model="mistral:7b",
+            model=os.getenv("OLLAMA_MODEL", "gemma4:latest"),
             temperature=temperature,
             top_p=top_p,
             timeout_seconds=timeout,

@@ -64,11 +64,11 @@ class LLMConfig:
     model: str = "gemini-2.5-flash"
     api_key: str = ""
     fallback_provider: str = "ollama"
-    fallback_model: str = "llama3.1"
-    base_url: str = "http://localhost:11434"
+    fallback_model: str = "gemma4:latest"
+    base_url: str = "http://localhost:11434/v1"
     temperature: float = 0.2
     top_p: float = 0.9
-    timeout_seconds: int = 60
+    timeout_seconds: int = 300
     system_prompt: str = (
         "You are JARVIS: concise, highly capable, proactive, and helpful. "
         "Prefer direct answers, use available tools when needed, and keep responses short unless more detail is requested."

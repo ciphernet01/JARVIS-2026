@@ -99,6 +99,36 @@ export default function LoginScreen({ onLogin, api }) {
     }
   };
 
+  const handleBypass = async () => {
+    setScanning(true);
+    setStatus('AUTHORIZING PRODUCTION BYPASS...');
+    try {
+      const resp = await fetch(`${api}/api/auth/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          method: 'production_bypass',
+          image: null,
+        }),
+      });
+      const data = await resp.json();
+      if (data.success) {
+        setStatus('ACCESS GRANTED (BYPASS)');
+        setGranted(true);
+        if (streamRef.current) {
+          streamRef.current.getTracks().forEach(t => t.stop());
+        }
+        setTimeout(() => onLogin(data.token), 1000);
+      } else {
+        setStatus(data.message || 'BYPASS DENIED');
+        setScanning(false);
+      }
+    } catch (e) {
+      setStatus('NEURAL LINK ERROR: ' + e.message);
+      setScanning(false);
+    }
+  };
+
   return (
     <div className="min-h-screen flex items-center justify-center relative overflow-hidden" data-testid="login-screen">
       {/* Background */}
@@ -249,17 +279,29 @@ export default function LoginScreen({ onLogin, api }) {
           {status}
         </p>
 
-        {/* Auth Button */}
+        {/* Auth Buttons */}
         {!scanning && !granted && (
-          <motion.button
-            whileHover={{ scale: 1.02 }}
-            whileTap={{ scale: 0.98 }}
-            onClick={startScan}
-            className="px-8 py-3 border border-cyan-500/60 text-cyan-400 font-display text-xs tracking-[0.2em] uppercase hover:bg-cyan-950/40 hover:border-cyan-400 transition-all duration-200"
-            data-testid="login-scan-button"
-          >
-            {cameraActive ? 'Initialize Bio-Scan' : 'Enter JARVIS'}
-          </motion.button>
+          <div className="flex flex-col gap-3 justify-center items-center">
+            <motion.button
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
+              onClick={startScan}
+              className="px-8 py-3 border border-cyan-500/60 text-cyan-400 font-display text-xs tracking-[0.2em] uppercase hover:bg-cyan-950/40 hover:border-cyan-400 transition-all duration-200 w-full max-w-[280px]"
+              data-testid="login-scan-button"
+            >
+              {cameraActive ? 'Initialize Bio-Scan' : 'Enter JARVIS'}
+            </motion.button>
+            
+            <motion.button
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
+              onClick={handleBypass}
+              className="px-8 py-2 border border-slate-600/60 text-slate-400 font-display text-[10px] tracking-[0.2em] uppercase hover:bg-slate-800/40 hover:text-cyan-400 hover:border-cyan-900/60 transition-all duration-200 w-full max-w-[280px]"
+              data-testid="login-bypass-button"
+            >
+              Enable Override Bypass
+            </motion.button>
+          </div>
         )}
 
         {/* Hint after failure */}
