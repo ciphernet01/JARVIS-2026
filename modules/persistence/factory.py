@@ -9,6 +9,7 @@ from .database import DatabaseManager
 from .conversation_store import ConversationStore
 from .audit_log import AuditLogger
 from .cache import Cache
+from .project_index_store import ProjectIndexStore
 from .user_store import UserStore, PreferenceStore
 from .skill_store import SkillStore
 from .task_store import TaskStore
@@ -49,6 +50,7 @@ class PersistenceFactory:
             preference_store = PreferenceStore(db_manager)
             skill_store = SkillStore(db_manager)
             task_store = TaskStore(db_manager)
+            project_index_store = ProjectIndexStore(db_manager)
 
             # Initialize cache
             cache = Cache(ttl_seconds=300)
@@ -63,6 +65,7 @@ class PersistenceFactory:
                 "preference_store": preference_store,
                 "skill_store": skill_store,
                 "task_store": task_store,
+                "project_index_store": project_index_store,
                 "cache": cache,
             }
 

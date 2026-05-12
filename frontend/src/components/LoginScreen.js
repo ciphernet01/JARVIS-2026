@@ -133,13 +133,16 @@ export default function LoginScreen({ onLogin, api }) {
     <div className="min-h-screen flex items-center justify-center relative overflow-hidden" data-testid="login-screen">
       {/* Background */}
       <div className="absolute inset-0 bg-slate-950">
-        <div className="absolute inset-0 opacity-15" style={{
-          backgroundImage: `url(https://images.unsplash.com/photo-1698571262509-5e96d6c64bd1?w=1200)`,
-          backgroundSize: 'cover',
-          backgroundPosition: 'center',
-          filter: 'hue-rotate(180deg) saturate(0.5)',
+        <div className="absolute inset-0 opacity-20" style={{
+          background: 'radial-gradient(circle at top, rgba(6,182,212,0.18), transparent 35%), radial-gradient(circle at bottom, rgba(14,165,233,0.14), transparent 30%), linear-gradient(180deg, rgba(2,6,23,0.96), rgba(2,6,23,0.92))',
         }} />
-        <div className="absolute inset-0 bg-gradient-to-b from-slate-950/80 via-transparent to-slate-950" />
+        <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(6,182,212,0.04)_1px,transparent_1px),linear-gradient(rgba(6,182,212,0.04)_1px,transparent_1px)] bg-[size:48px_48px] opacity-30" />
+        <div className="absolute inset-0 bg-gradient-to-b from-slate-950/40 via-transparent to-slate-950" />
+      </div>
+
+      <div className="absolute top-4 left-4 right-4 flex items-center justify-between z-20 font-mono text-[9px] tracking-[0.2em] uppercase text-cyan-300/40">
+        <span>Sypher Industries // J.A.R.V.I.S OS</span>
+        <span>Voice-first shell active</span>
       </div>
 
       {/* Login Card */}
@@ -151,12 +154,16 @@ export default function LoginScreen({ onLogin, api }) {
         }`}
         data-testid="login-container"
       >
+        <div className="mb-4 inline-flex items-center gap-2 px-3 py-1 border border-cyan-500/20 bg-cyan-950/20 text-cyan-300/70 font-mono text-[9px] tracking-[0.25em] uppercase">
+          <Scan size={10} /> System entry // biometric + voice
+        </div>
+
         {/* Title */}
         <h1 className="font-display text-4xl tracking-tighter uppercase text-cyan-400 mb-1" style={{ textShadow: '0 0 20px rgba(6,182,212,0.5)' }}>
-          J.A.R.V.I.S
+          J.A.R.V.I.S OS
         </h1>
         <p className="font-display text-xs tracking-[0.2em] uppercase text-cyan-300/60 mb-6">
-          Sypher Industries // Security Protocol
+          Sypher Industries // Debian Shell Interface
         </p>
 
         {/* Camera Feed - Large and visible */}
@@ -289,7 +296,7 @@ export default function LoginScreen({ onLogin, api }) {
               className="px-8 py-3 border border-cyan-500/60 text-cyan-400 font-display text-xs tracking-[0.2em] uppercase hover:bg-cyan-950/40 hover:border-cyan-400 transition-all duration-200 w-full max-w-[280px]"
               data-testid="login-scan-button"
             >
-              {cameraActive ? 'Initialize Bio-Scan' : 'Enter JARVIS'}
+              <span className="inline-flex items-center gap-2 justify-center">{cameraActive ? <Scan size={12} /> : <Scan size={12} />} {cameraActive ? 'Initialize Bio-Scan' : 'Enter JARVIS'}</span>
             </motion.button>
             
             <motion.button
@@ -317,6 +324,16 @@ export default function LoginScreen({ onLogin, api }) {
             ? 'Matching against: imagedata/ folder + enrolled profiles'
             : 'Camera unavailable: secured local production bypass'}
         </p>
+
+        <div className="mt-4 flex items-center justify-center gap-3 font-mono text-[8px] tracking-[0.18em] uppercase text-cyan-300/35">
+          <span>Voice</span>
+          <span>•</span>
+          <span>Vision</span>
+          <span>•</span>
+          <span>Filesystem</span>
+          <span>•</span>
+          <span>System Control</span>
+        </div>
       </motion.div>
     </div>
   );

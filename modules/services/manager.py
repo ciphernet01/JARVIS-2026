@@ -202,6 +202,50 @@ class ServiceManager:
             results.append(st.get("output", {}))
         return results
 
+    def list_processes(self, limit: int = 50, sort_by_cpu: bool = True) -> List[Dict[str, Any]]:
+        """List running system processes for OS-style inspection."""
+        processes: List[Dict[str, Any]] = []
+
+        try:
+            proc_iter = psutil.process_iter(
+                ["pid", "name", "username", "status", "create_time", "cmdline", "memory_percent"]
+            )
+            for proc in proc_iter:
+                try:
+                    cpu = proc.cpu_percent(interval=0.0)
+                    info = proc.info
+                    processes.append(
+                        {
+                            "pid": info.get("pid"),
+                            "name": info.get("name") or "unknown",
+                            "username": info.get("username"),
+                            "status": info.get("status"),
+                            "create_time": datetime.fromtimestamp(info.get("create_time") or 0).isoformat()
+                            if info.get("create_time")
+                            else None,
+                            "cmdline": " ".join(info.get("cmdline") or []),
+                            "cpu_percent": round(cpu, 1),
+                            "memory_percent": round(info.get("memory_percent") or 0.0, 1),
+                        }
+                    )
+                except (psutil.NoSuchProcess, psutil.AccessDenied):
+                    continue
+        except Exception as exc:
+            logger.warning(f"Failed to inspect system processes: {exc}")
+
+        if sort_by_cpu:
+            processes.sort(key=lambda item: (item.get("cpu_percent") or 0.0, item.get("memory_percent") or 0.0), reverse=True)
+
+        return processes[:limit]
+
+    def get_status_snapshot(self) -> Dict[str, Any]:
+        """Return high level service/process state."""
+        return {
+            "tracked_services": len(self._services),
+            "tracked_service_names": sorted(self._services.keys()),
+            "running_processes": len(self.list_processes(limit=9999)),
+        }
+
     def cleanup(self) -> None:
         """Stop all tracked services."""
         for name in list(self._services.keys()):

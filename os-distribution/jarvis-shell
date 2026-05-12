@@ -1,0 +1,183 @@
+#!/usr/bin/env python3
+"""
+JARVIS Voice Shell - Primary user interface for JARVIS OS
+Provides voice-first interaction with the operating system
+"""
+
+import sys
+import os
+import requests
+import json
+import time
+from pathlib import Path
+
+# Add JARVIS to path
+JARVIS_HOME = os.environ.get('JARVIS_HOME', '/opt/jarvis')
+sys.path.insert(0, JARVIS_HOME)
+
+class JARVISVoiceShell:
+    """Voice-first shell powered by JARVIS."""
+    
+    def __init__(self):
+        self.api_base = "http://localhost:8001"
+        self.token = os.environ.get('JARVIS_TOKEN', 'system-boot')
+        self.session_id = None
+        self.running = True
+        self.history = []
+        
+    def connect(self):
+        """Connect to JARVIS backend."""
+        try:
+            resp = requests.get(
+                f"{self.api_base}/api/health",
+                headers={'X-JARVIS-TOKEN': self.token},
+                timeout=5
+            )
+            if resp.status_code == 200:
+                print("\n🎤 JARVIS Voice Shell v2.0")
+                print("━" * 50)
+                print("Status: Connected to JARVIS core")
+                print("Voice Interface: Ready")
+                print("━" * 50)
+                return True
+        except Exception as e:
+            print(f"⚠️  Could not connect to JARVIS: {e}")
+            return False
+    
+    def display_prompt(self):
+        """Show voice prompt."""
+        print("\n[JARVIS]> ", end="", flush=True)
+    
+    def send_command(self, command: str):
+        """Send command to JARVIS for processing."""
+        try:
+            resp = requests.post(
+                f"{self.api_base}/api/chat",
+                headers={'X-JARVIS-TOKEN': self.token},
+                json={
+                    'message': command,
+                    'session_id': self.session_id,
+                    'source': 'voice_shell'
+                },
+                timeout=30
+            )
+            
+            if resp.status_code == 200:
+                data = resp.json()
+                response = data.get('response', 'No response')
+                
+                print(f"\n✓ JARVIS: {response}")
+                
+                self.history.append({
+                    'command': command,
+                    'response': response,
+                    'timestamp': time.time()
+                })
+                return True
+            else:
+                print(f"\n✗ Error: {resp.status_code}")
+                return False
+                
+        except requests.exceptions.Timeout:
+            print("\n✗ Request timeout - JARVIS is busy")
+            return False
+        except Exception as e:
+            print(f"\n✗ Error: {e}")
+            return False
+    
+    def handle_system_command(self, command: str):
+        """Handle special shell commands."""
+        if command.lower() in ['exit', 'quit', 'bye']:
+            self.running = False
+            print("👋 JARVIS stands by. Farewell.")
+            return True
+        elif command.lower() == 'help':
+            print("""
+JARVIS Voice Shell Commands:
+  help              - Show this help
+  history           - Show command history
+  status            - Check system status
+  exit/quit         - Exit shell
+  
+Or speak naturally to JARVIS for system operations:
+  "list processes", "check battery", "enable wifi", etc.
+            """)
+            return True
+        elif command.lower() == 'history':
+            if self.history:
+                print("\nCommand History:")
+                for i, item in enumerate(self.history[-10:], 1):
+                    print(f"{i}. {item['command']}")
+            else:
+                print("No history yet")
+            return True
+        elif command.lower() == 'status':
+            self.check_system_status()
+            return True
+        return False
+    
+    def check_system_status(self):
+        """Display current system status."""
+        try:
+            resp = requests.get(
+                f"{self.api_base}/api/os/status",
+                headers={'X-JARVIS-TOKEN': self.token},
+                timeout=5
+            )
+            if resp.status_code == 200:
+                data = resp.json()
+                print(f"""
+System Status:
+  Platform: {data.get('platform')}
+  CPU: {data.get('cpu_percent')}%
+  Memory: {data.get('memory_percent')}%
+  Disk: {data.get('disk_percent')}%
+  Processes: {data.get('process_count')}
+                """)
+        except Exception as e:
+            print(f"Could not fetch status: {e}")
+    
+    def run_interactive(self):
+        """Run interactive shell loop."""
+        if not self.connect():
+            print("Failed to connect to JARVIS core")
+            return 1
+        
+        try:
+            while self.running:
+                self.display_prompt()
+                try:
+                    user_input = input().strip()
+                    
+                    if not user_input:
+                        continue
+                    
+                    # Check for special commands first
+                    if self.handle_system_command(user_input):
+                        continue
+                    
+                    # Send to JARVIS
+                    self.send_command(user_input)
+                    
+                except KeyboardInterrupt:
+                    print("\n⏸️  Interrupted")
+                    self.running = False
+                except EOFError:
+                    print("\n👋 End of input")
+                    self.running = False
+                    
+        except Exception as e:
+            print(f"Shell error: {e}")
+            return 1
+        
+        return 0
+
+
+def main():
+    """Entry point for voice shell."""
+    shell = JARVISVoiceShell()
+    return shell.run_interactive()
+
+
+if __name__ == '__main__':
+    sys.exit(main())

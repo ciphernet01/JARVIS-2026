@@ -192,11 +192,30 @@ class DatabaseManager:
                 )
             """)
 
+            # Project index table
+            self.execute("""
+                CREATE TABLE IF NOT EXISTS project_index (
+                    id TEXT PRIMARY KEY,
+                    workspace_root TEXT NOT NULL,
+                    root_path TEXT NOT NULL,
+                    project_name TEXT NOT NULL,
+                    project_type TEXT,
+                    summary TEXT,
+                    source_file TEXT,
+                    metadata TEXT,
+                    discovered_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    UNIQUE(workspace_root, root_path)
+                )
+            """)
+
             # Create indices for performance
             self.execute("CREATE INDEX IF NOT EXISTS idx_conversations_user_id ON conversations(user_id)")
             self.execute("CREATE INDEX IF NOT EXISTS idx_conversations_timestamp ON conversations(timestamp)")
             self.execute("CREATE INDEX IF NOT EXISTS idx_audit_log_user_id ON audit_log(user_id)")
             self.execute("CREATE INDEX IF NOT EXISTS idx_audit_log_timestamp ON audit_log(timestamp)")
+            self.execute("CREATE INDEX IF NOT EXISTS idx_project_index_workspace_root ON project_index(workspace_root)")
+            self.execute("CREATE INDEX IF NOT EXISTS idx_project_index_project_type ON project_index(project_type)")
 
             self.commit()
             logger.info("Database tables created successfully")

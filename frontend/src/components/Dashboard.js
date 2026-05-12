@@ -7,15 +7,17 @@ import WeatherWidget from './WeatherWidget';
 import CalendarWidget from './CalendarWidget';
 import StatusPanel from './StatusPanel';
 import DevWorkspace from './DevWorkspace';
+import FilesystemExplorer from './FilesystemExplorer';
+import SystemControlPanel from './SystemControlPanel';
 import SettingsPanel from './SettingsPanel';
 import BottomDock from './BottomDock';
-import { Activity, Cpu, Cloud, Code2, Terminal as TermIcon, Settings, Zap } from 'lucide-react';
+import { Activity, Cpu, Cloud, Code2, Terminal as TermIcon, Settings, Zap, FolderOpen, ShieldCheck } from 'lucide-react';
 
 export default function Dashboard({ token, api, onLogout }) {
   const [metrics, setMetrics] = useState(null);
   const [weather, setWeather] = useState(null);
   const [status, setStatus] = useState(null);
-  const [activePanel, setActivePanel] = useState('terminal');
+  const [activePanel, setActivePanel] = useState('control');
 
   const fetchMetrics = useCallback(async () => {
     try {
@@ -106,6 +108,24 @@ export default function Dashboard({ token, api, onLogout }) {
                 <TermIcon size={14} /> Command Terminal
               </button>
               <button
+                onClick={() => setActivePanel('control')}
+                className={`flex items-center gap-2 px-4 py-2 text-xs font-display tracking-wider uppercase transition-all ${
+                  activePanel === 'control' ? 'text-cyan-400 bg-cyan-950/40 border-b border-cyan-400' : 'text-cyan-300/50 hover:text-cyan-300'
+                }`}
+                data-testid="tab-control"
+              >
+                <ShieldCheck size={14} /> OS Control
+              </button>
+              <button
+                onClick={() => setActivePanel('filesystem')}
+                className={`flex items-center gap-2 px-4 py-2 text-xs font-display tracking-wider uppercase transition-all ${
+                  activePanel === 'filesystem' ? 'text-cyan-400 bg-cyan-950/40 border-b border-cyan-400' : 'text-cyan-300/50 hover:text-cyan-300'
+                }`}
+                data-testid="tab-filesystem"
+              >
+                <FolderOpen size={14} /> Filesystem
+              </button>
+              <button
                 onClick={() => setActivePanel('developer')}
                 className={`flex items-center gap-2 px-4 py-2 text-xs font-display tracking-wider uppercase transition-all ${
                   activePanel === 'developer' ? 'text-cyan-400 bg-cyan-950/40 border-b border-cyan-400' : 'text-cyan-300/50 hover:text-cyan-300'
@@ -125,7 +145,9 @@ export default function Dashboard({ token, api, onLogout }) {
               </button>
             </div>
             <div className="flex-1 overflow-hidden">
+              {activePanel === 'control' && <SystemControlPanel api={api} token={token} />}
               {activePanel === 'terminal' && <Terminal api={api} token={token} />}
+              {activePanel === 'filesystem' && <FilesystemExplorer api={api} token={token} />}
               {activePanel === 'developer' && <DevWorkspace api={api} token={token} />}
               {activePanel === 'settings' && <SettingsPanel api={api} token={token} />}
             </div>

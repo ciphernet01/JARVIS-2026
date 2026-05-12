@@ -1,10 +1,13 @@
 import React from 'react';
-import { Terminal, Code2, Activity, Power, Settings, Globe } from 'lucide-react';
+import { Terminal, Code2, Activity, Power, Settings, Globe, FolderOpen } from 'lucide-react';
 
 export default function BottomDock({ activePanel, setActivePanel, onLogout }) {
   const items = [
+    { id: 'control', icon: Activity, label: 'OS Control' },
+    
     { id: 'terminal', icon: Terminal, label: 'Terminal' },
     { id: 'developer', icon: Code2, label: 'Developer' },
+    { id: 'filesystem', icon: FolderOpen, label: 'Filesystem' },
     { id: 'settings', icon: Settings, label: 'Settings' },
   ];
 

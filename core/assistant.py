@@ -5,7 +5,9 @@ Orchestrates all modules and manages the conversation flow
 
 import asyncio
 import logging
+import os
 from datetime import datetime
+from pathlib import Path
 from typing import Any, Callable, Dict, Optional
 
 from .config import ConfigManager
@@ -69,6 +71,8 @@ class Assistant:
         self.persistence = persistence_components or {}
         self.performance_manager = performance_manager
         self.memory = MemoryManager(self.persistence) if self.persistence else None
+        self.project_index_store = self.persistence.get("project_index_store") if self.persistence else None
+        self.project_index: Dict[str, Any] = {}
         self.agent_manager = AgentManager(
             llm_manager=self.llm_manager,
             skill_registry=self.skill_registry,
@@ -101,6 +105,8 @@ class Assistant:
                 logger.info("ReActAgent initialized with tool suite")
             except Exception as exc:
                 logger.warning(f"ReActAgent initialization failed: {exc}")
+
+        self._refresh_project_index()
 
         self.is_running = False
         self.conversation_history: list = []
@@ -149,6 +155,8 @@ class Assistant:
                                 pass
                         available_skills.append({"name": name})
 
+        project_index = self.project_index or self._refresh_project_index()
+
         return {
             "user_input": user_input,
             "user_name": self.user_context.get("user_name", "Sir"),
@@ -158,7 +166,41 @@ class Assistant:
             "memory_context": self.user_context.get("memory_context", ""),
             "recent_history": recent_history,
             "available_skills": available_skills,
+            "project_index": project_index,
         }
+
+    def _workspace_root(self) -> Optional[str]:
+        """Resolve the workspace root used for project indexing."""
+        if self.user_context.get("workspace_root"):
+            return str(self.user_context.get("workspace_root"))
+
+        workspace_root = os.getenv("JARVIS_WORKSPACE")
+        if workspace_root:
+            return workspace_root
+
+        return str(Path(__file__).resolve().parents[1])
+
+    def _refresh_project_index(self) -> Dict[str, Any]:
+        """Scan the workspace and cache a prompt-friendly project inventory."""
+        if not self.project_index_store:
+            self.project_index = {}
+            return self.project_index
+
+        try:
+            workspace_root = self._workspace_root()
+            if not workspace_root:
+                return self.project_index
+
+            discovered = self.project_index_store.refresh_index(workspace_root)
+            summary = self.project_index_store.build_summary(workspace_root)
+            self.project_index = summary
+            self.user_context["project_index"] = summary
+            self.user_context["project_inventory"] = discovered
+            self.user_context["workspace_root"] = workspace_root
+            logger.info(f"Project index refreshed with {summary.get('project_count', 0)} project(s)")
+        except Exception as exc:
+            logger.warning(f"Failed to refresh project index: {exc}")
+        return self.project_index
 
     def _save_conversation_to_persistence(
         self,
@@ -549,6 +591,7 @@ class Assistant:
             "agent_enabled": self.agent_manager is not None,
             "react_agent_enabled": self.react_agent is not None,
             "llm_router_enabled": self.llm_router is not None,
+            "project_index_enabled": bool(self.project_index_store),
         }
 
     def set_current_user(self, user_id: str) -> None:

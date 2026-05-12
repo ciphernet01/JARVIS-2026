@@ -1,0 +1,40 @@
+{
+  "name": "jarvis-desktop-overlay",
+  "version": "2.0.0",
+  "private": true,
+  "main": "main.js",
+  "description": "Electron overlay shell for the JARVIS React UI.",
+  "scripts": {
+    "start": "electron .",
+    "dev": "electron .",
+    "pack": "electron-builder --dir",
+    "dist": "electron-builder"
+  },
+  "dependencies": {
+    "electron": "^31.0.0"
+  },
+  "devDependencies": {
+    "electron-builder": "^24.13.3"
+  },
+  "build": {
+    "appId": "com.sypherindustries.jarvis",
+    "productName": "JARVIS Overlay",
+    "files": [
+      "main.js",
+      "preload.js",
+      "package.json"
+    ],
+    "directories": {
+      "buildResources": "assets"
+    },
+    "win": {
+      "target": ["nsis"]
+    },
+    "mac": {
+      "target": ["dmg"]
+    },
+    "linux": {
+      "target": ["AppImage"]
+    }
+  }
+}

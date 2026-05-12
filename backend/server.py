@@ -34,6 +34,7 @@ load_dotenv()
 # Import new JARVIS core
 from core import ConfigManager, Assistant
 from modules.skills import SkillFactory
+from modules.services import DeviceManager, ServiceManager, AudioManager, CameraManager, PowerManager, NetworkManager, VoiceManager
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
@@ -72,23 +73,48 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
+@app.on_event("startup")
+async def startup_event():
+    """Warm up assistant and voice router on server startup."""
+    try:
+        _get_assistant()
+        _get_voice_router()
+        logger.info("JARVIS backend startup complete")
+    except Exception as exc:
+        logger.warning(f"Startup warmup failed: {exc}")
+
 # ── Initialize JARVIS Core (ReActAgent + LLMRouter) ─────────────────────────
 _jarvis_assistant: Optional[Assistant] = None
+_service_manager: Optional[ServiceManager] = None
+_device_manager: Optional[DeviceManager] = None
+_audio_manager: Optional[AudioManager] = None
+_camera_manager: Optional[CameraManager] = None
+_power_manager: Optional[PowerManager] = None
+_network_manager: Optional[NetworkManager] = None
+_voice_router = None
 
 
-def _get_assistant() -> Assistant:
+def _get_network_manager() -> NetworkManager:
+    global _network_manager
+    if _network_manager is None:
+        _network_manager = NetworkManager()
+    return _network_manager
+
+
+def _get_assistant() -> Optional[Assistant]:
     global _jarvis_assistant
     if _jarvis_assistant is None:
         try:
             config = ConfigManager()
             skill_registry = SkillFactory.create_default_registry()
-            
+
             # Setup persistence layer for the web backend (Absolute path)
             db_path = Path(__file__).resolve().parent.parent / "jarvis.db"
             db_url = f"sqlite:///{db_path}"
             from modules.persistence import PersistenceFactory
             persistence_components = PersistenceFactory.initialize(db_url)
-            
+
             _jarvis_assistant = Assistant(
                 config_manager=config,
                 skill_registry=skill_registry,
@@ -101,7 +127,57 @@ def _get_assistant() -> Assistant:
     return _jarvis_assistant
 
 
+def _get_voice_router():
+    """Get the voice command router singleton."""
+    global _voice_router
+    if _voice_router is None:
+        from modules.agent.voice_router import VoiceCommandRouter
+
+        _voice_router = VoiceCommandRouter(_get_assistant(), _get_voice_manager())
+    return _voice_router
+
+
+def _get_service_manager() -> ServiceManager:
+    global _service_manager
+    if _service_manager is None:
+        _service_manager = ServiceManager()
+    return _service_manager
+
+
+def _get_device_manager() -> DeviceManager:
+    global _device_manager
+    if _device_manager is None:
+        _device_manager = DeviceManager(workspace_root=str(WORKSPACE_ROOT))
+    return _device_manager
+
+
+def _get_audio_manager() -> AudioManager:
+    global _audio_manager
+    if _audio_manager is None:
+        _audio_manager = AudioManager()
+    return _audio_manager
+
+
+def _get_camera_manager() -> CameraManager:
+    global _camera_manager
+    if _camera_manager is None:
+        _camera_manager = CameraManager()
+    return _camera_manager
+
+
+def _get_power_manager() -> PowerManager:
+    global _power_manager
+    if _power_manager is None:
+        _power_manager = PowerManager()
+    return _power_manager
+
+
 # ── Models ───────────────────────────────────────────────────────────────────
+class OSCommandRequest(BaseModel):
+    command: str
+    dry_run: bool = False
+
+
 class LoginRequest(BaseModel):
     method: str = "biometric"
     image: Optional[str] = None  # Base64 webcam frame
@@ -177,12 +253,20 @@ def _system_snapshot() -> Dict[str, Any]:
     memory = psutil.virtual_memory()
     disk = psutil.disk_usage(str(WORKSPACE_ROOT.anchor or WORKSPACE_ROOT))
     battery = psutil.sensors_battery()
+    cpu_freq = psutil.cpu_freq()
     return {
         "platform": f"{platform.system()} {platform.release()}",
         "cpu_percent": psutil.cpu_percent(interval=None),
+        "cpu_cores": psutil.cpu_count(logical=True),
+        "cpu_freq_mhz": round(cpu_freq.current) if cpu_freq else 0,
         "memory_percent": memory.percent,
+        "memory_total_gb": round(memory.total / (1024**3), 1),
         "memory_available_gb": round(memory.available / (1024**3), 2),
+        "memory_used_gb": round(memory.used / (1024**3), 1),
         "disk_percent": disk.percent,
+        "disk_total_gb": round(disk.total / (1024**3), 1),
+        "disk_used_gb": round(disk.used / (1024**3), 1),
+        "disk_free_gb": round(disk.free / (1024**3), 1),
         "battery_percent": battery.percent if battery else None,
         "power_plugged": battery.power_plugged if battery else None,
     }
@@ -201,10 +285,34 @@ def _list_workspace(raw_path: Optional[str] = None) -> Dict[str, Any]:
             "name": item.name,
             "type": "directory" if item.is_dir() else "file",
             "size": item.stat().st_size if item.is_file() else None,
+            "modified": datetime.fromtimestamp(item.stat().st_mtime, tz=timezone.utc).isoformat(),
         })
     return {
         "path": "." if target == WORKSPACE_ROOT else str(target.relative_to(WORKSPACE_ROOT)),
         "entries": entries,
+    }
+
+
+def _read_workspace_file(raw_path: str) -> Dict[str, Any]:
+    target = _resolve_workspace_path(raw_path)
+    if not target.exists():
+        raise HTTPException(status_code=404, detail="Path does not exist")
+    if not target.is_file():
+        raise HTTPException(status_code=400, detail="Path is not a file")
+
+    try:
+        text = target.read_text(encoding="utf-8", errors="replace")
+        is_binary = False
+    except Exception:
+        text = "[Binary file preview unavailable]"
+        is_binary = True
+
+    return {
+        "path": str(target.relative_to(WORKSPACE_ROOT)),
+        "name": target.name,
+        "size": target.stat().st_size,
+        "is_binary": is_binary,
+        "content": text[:12000],
     }
 
 
@@ -223,6 +331,68 @@ def _open_allowed_app(command: str, dry_run: bool = False) -> Dict[str, Any]:
     if not dry_run:
         subprocess.Popen([resolved], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, shell=False)
     return {"app": app_key, "executable": executable, "launched": not dry_run}
+
+
+def _route_os_command(command: str, dry_run: bool = False) -> Dict[str, Any]:
+    """Route safe OS-level commands to the proper backend action."""
+    lowered = command.lower().strip()
+    service_manager = _get_service_manager()
+
+    if any(phrase in lowered for phrase in ["show processes", "list processes", "process list", "task list"]):
+        processes = service_manager.list_processes(limit=60)
+        return {
+            "handled": True,
+            "intent": "list_processes",
+            "response": f"Process snapshot ready. {len(processes)} processes indexed.",
+            "data": {"processes": processes},
+        }
+
+    if any(phrase in lowered for phrase in ["show services", "list services", "service list", "services"]):
+        services = service_manager.list_services()
+        return {
+            "handled": True,
+            "intent": "list_services",
+            "response": f"Tracked service snapshot ready. {len(services)} service(s) tracked.",
+            "data": {"services": services},
+        }
+
+    if any(phrase in lowered for phrase in ["show devices", "device status", "hardware status", "hardware snapshot"]):
+        devices = _get_device_manager().snapshot()
+        return {
+            "handled": True,
+            "intent": "device_snapshot",
+            "response": "Hardware snapshot ready.",
+            "data": devices,
+        }
+
+    if any(phrase in lowered for phrase in ["open ", "launch ", "start "]):
+        data = _open_allowed_app(command, dry_run=dry_run)
+        return {
+            "handled": True,
+            "intent": "open_app",
+            "response": f"{'Ready to launch' if dry_run else 'Launched'} {data['app']}, Sir.",
+            "data": data,
+        }
+
+    if lowered.startswith(("start service ", "run service ")):
+        service_name = command.split(maxsplit=2)[-1]
+        return {
+            "handled": True,
+            "intent": "start_service",
+            "response": f"Service start requested for {service_name}.",
+            "data": {"service": service_name, "dry_run": dry_run},
+        }
+
+    if lowered.startswith(("stop service ", "kill service ")):
+        service_name = command.split(maxsplit=2)[-1]
+        return {
+            "handled": True,
+            "intent": "stop_service",
+            "response": f"Service stop requested for {service_name}.",
+            "data": {"service": service_name, "dry_run": dry_run},
+        }
+
+    return {"handled": False, "intent": "chat", "response": None, "data": {}}
 
 
 def _create_static_app(command: str, dry_run: bool = False) -> Dict[str, Any]:
@@ -889,6 +1059,23 @@ async def process_command(req: CommandRequest, user=Depends(verify_token)):
     }
 
 
+@app.post("/api/os/command")
+async def os_command(req: OSCommandRequest, user=Depends(verify_token)):
+    """Route a safe OS-level command through the JARVIS system layer."""
+    command = req.command.strip()
+    if not command:
+        raise HTTPException(status_code=400, detail="No command provided")
+
+    result = _route_os_command(command, dry_run=req.dry_run)
+    if not result["handled"]:
+        result = await execute_operator_command(command, dry_run=req.dry_run)
+
+    return {
+        **result,
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+    }
+
+
 @app.post("/api/operator/execute")
 async def operator_execute(req: OperatorRequest, user=Depends(verify_token)):
     """Execute safe local operator actions for JARVIS/FRIDAY style control."""
@@ -1048,6 +1235,589 @@ async def system_status(user=Depends(verify_token)):
     }
 
 
+@app.get("/api/os/status")
+async def os_status(user=Depends(verify_token)):
+    """Return OS-style capability and system control metadata."""
+    snapshot = _system_snapshot()
+    service_state = _get_service_manager().get_status_snapshot()
+    return {
+        "platform": snapshot.get("platform"),
+        "cpu_percent": snapshot.get("cpu_percent"),
+        "memory_percent": snapshot.get("memory_percent"),
+        "disk_percent": snapshot.get("disk_percent"),
+        "battery_percent": snapshot.get("battery_percent"),
+        "power_plugged": snapshot.get("power_plugged"),
+        "workspace_root": str(WORKSPACE_ROOT),
+        "service_state": service_state,
+        "capabilities": [
+            "filesystem_navigation",
+            "system_metrics",
+            "operator_control",
+            "voice_commands",
+            "device_management",
+            "service_control",
+        ],
+    }
+
+
+@app.get("/api/os/fs/list")
+async def os_fs_list(path: Optional[str] = None, user=Depends(verify_token)):
+    """List files and folders inside the workspace."""
+    return _list_workspace(path)
+
+
+@app.get("/api/os/fs/read")
+async def os_fs_read(path: str, user=Depends(verify_token)):
+    """Read the text preview of a workspace file."""
+    return _read_workspace_file(path)
+
+
+@app.get("/api/os/processes")
+async def os_processes(limit: int = 50, user=Depends(verify_token)):
+    """Return a process snapshot for the OS control surface."""
+    processes = _get_service_manager().list_processes(limit=limit)
+    return {"processes": processes, "count": len(processes)}
+
+
+@app.get("/api/os/services")
+async def os_services(user=Depends(verify_token)):
+    """Return tracked services."""
+    services = _get_service_manager().list_services()
+    return {"services": services, "count": len(services)}
+
+
+@app.get("/api/os/devices")
+async def os_devices(user=Depends(verify_token)):
+    """Return a high signal hardware snapshot for the OS control layer."""
+    return _get_device_manager().snapshot()
+
+
+@app.get("/api/os/audio/snapshot")
+async def os_audio_snapshot(user=Depends(verify_token)):
+    """Return comprehensive audio system state snapshot."""
+    snapshot = _get_audio_manager().snapshot()
+    return {
+        "devices": [{"id": d.id, "name": d.name, "is_input": d.is_input, "is_output": d.is_output, 
+                    "is_default_input": d.is_default_input, "is_default_output": d.is_default_output}
+                   for d in snapshot.devices],
+        "default_input": snapshot.default_input,
+        "default_output": snapshot.default_output,
+        "volume": snapshot.volume,
+        "microphone_enabled": snapshot.microphone_enabled,
+        "speakers_enabled": snapshot.speakers_enabled,
+        "mic_muted": snapshot.mic_muted,
+        "platform": snapshot.platform_name
+    }
+
+
+@app.get("/api/os/audio/volume")
+async def os_audio_volume_get(user=Depends(verify_token)):
+    """Get current system volume level."""
+    snapshot = _get_audio_manager().snapshot()
+    return {"volume": snapshot.volume, "min": 0.0, "max": 100.0}
+
+
+class VolumeRequest(BaseModel):
+    volume: float
+
+
+@app.post("/api/os/audio/volume")
+async def os_audio_volume_set(request: VolumeRequest, user=Depends(verify_token)):
+    """Set system volume level."""
+    try:
+        success = _get_audio_manager().set_volume(request.volume)
+        if success:
+            return {"status": "success", "volume": request.volume}
+        else:
+            raise HTTPException(status_code=400, detail="Failed to set volume")
+    except Exception as e:
+        logger.error(f"Volume set error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/os/audio/microphone")
+async def os_audio_microphone_get(user=Depends(verify_token)):
+    """Get microphone state."""
+    snapshot = _get_audio_manager().snapshot()
+    return {
+        "enabled": snapshot.microphone_enabled,
+        "muted": snapshot.mic_muted,
+        "available": snapshot.microphone_enabled
+    }
+
+
+class MicrophoneRequest(BaseModel):
+    enabled: bool
+
+
+@app.post("/api/os/audio/microphone")
+async def os_audio_microphone_set(request: MicrophoneRequest, user=Depends(verify_token)):
+    """Enable or disable microphone."""
+    try:
+        success = _get_audio_manager().toggle_microphone(request.enabled)
+        if success:
+            return {"status": "success", "enabled": request.enabled}
+        else:
+            raise HTTPException(status_code=400, detail="Failed to toggle microphone")
+    except Exception as e:
+        logger.error(f"Microphone toggle error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+class CameraRequest(BaseModel):
+    face_detection: bool = True
+
+
+@app.get("/api/os/camera/state")
+async def os_camera_state(user=Depends(verify_token)):
+    """Get current camera state."""
+    state = _get_camera_manager().state()
+    return {
+        "available": state.available,
+        "enabled": state.enabled,
+        "device_id": state.device_id,
+        "recording": state.recording,
+        "resolution": f"{state.resolution[0]}x{state.resolution[1]}",
+        "fps": state.fps,
+        "face_detection_active": state.face_detection_active,
+        "last_face_timestamp": state.last_face_timestamp
+    }
+
+
+@app.post("/api/os/camera/enable")
+async def os_camera_enable(user=Depends(verify_token)):
+    """Enable camera access."""
+    try:
+        success = _get_camera_manager().enable()
+        if success:
+            return {"status": "success", "enabled": True}
+        else:
+            raise HTTPException(status_code=400, detail="Failed to enable camera")
+    except Exception as e:
+        logger.error(f"Camera enable error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/os/camera/disable")
+async def os_camera_disable(user=Depends(verify_token)):
+    """Disable camera access."""
+    try:
+        success = _get_camera_manager().disable()
+        if success:
+            return {"status": "success", "enabled": False}
+        else:
+            raise HTTPException(status_code=400, detail="Failed to disable camera")
+    except Exception as e:
+        logger.error(f"Camera disable error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/os/camera/snapshot")
+async def os_camera_snapshot(detect_faces: bool = True, user=Depends(verify_token)):
+    """Capture a snapshot from the camera with optional face detection."""
+    try:
+        if not _get_camera_manager().state().enabled:
+            raise HTTPException(status_code=400, detail="Camera not enabled")
+        
+        snapshot = _get_camera_manager().capture_snapshot(detect_faces=detect_faces)
+        if snapshot is None:
+            raise HTTPException(status_code=500, detail="Failed to capture snapshot")
+        
+        return {
+            "timestamp": snapshot.timestamp,
+            "width": snapshot.width,
+            "height": snapshot.height,
+            "has_faces": snapshot.has_faces,
+            "face_count": snapshot.face_count,
+            "face_locations": snapshot.face_locations,
+            "jpeg_base64": snapshot.jpeg_base64
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Snapshot capture error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/os/camera/face-detection")
+async def os_camera_face_detection(request: CameraRequest, user=Depends(verify_token)):
+    """Enable or disable face detection."""
+    try:
+        if request.face_detection:
+            success = _get_camera_manager().start_face_detection()
+        else:
+            success = _get_camera_manager().stop_face_detection()
+        
+        if success:
+            return {"status": "success", "face_detection": request.face_detection}
+        else:
+            raise HTTPException(status_code=400, detail="Failed to toggle face detection")
+    except Exception as e:
+        logger.error(f"Face detection toggle error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/os/camera/devices")
+async def os_camera_devices(user=Depends(verify_token)):
+    """List available camera devices."""
+    try:
+        devices = _get_camera_manager().list_devices()
+        return {"devices": devices, "count": len(devices)}
+    except Exception as e:
+        logger.error(f"Camera device list error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+class PowerActionRequest(BaseModel):
+    action: str  # "sleep", "restart", "shutdown", "hibernate"
+    confirmed: bool = False
+
+
+@app.get("/api/os/power/state")
+async def os_power_state(user=Depends(verify_token)):
+    """Get current system power state."""
+    state = _get_power_manager().state()
+    return {
+        "ac_powered": state.ac_powered,
+        "battery_percent": state.battery_percent,
+        "charging": state.charging,
+        "on_battery": state.on_battery,
+        "low_battery": state.low_battery,
+        "critical_battery": state.critical_battery,
+        "estimated_runtime_minutes": state.estimated_runtime_minutes
+    }
+
+
+@app.post("/api/os/power/action")
+async def os_power_action(request: PowerActionRequest, user=Depends(verify_token)):
+    """
+    Execute a power management action.
+    All power actions require explicit confirmation.
+    """
+    if not request.confirmed:
+        return {
+            "status": "pending_confirmation",
+            "action": request.action,
+            "message": "Action requires explicit user confirmation via UI button"
+        }
+    
+    try:
+        action = request.action.lower()
+        manager = _get_power_manager()
+        
+        if action == "sleep":
+            result = manager.sleep(confirmed=True)
+        elif action == "restart":
+            result = manager.restart(confirmed=True)
+        elif action == "shutdown":
+            result = manager.shutdown(confirmed=True)
+        elif action == "hibernate":
+            result = manager.hibernate(confirmed=True)
+        else:
+            raise HTTPException(status_code=400, detail=f"Unknown action: {action}")
+        
+        return {
+            "status": "success" if result.success else "failed",
+            "action": result.action.value,
+            "message": result.message
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Power action error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/os/power/cancel")
+async def os_power_cancel(user=Depends(verify_token)):
+    """Cancel any pending shutdown/restart operation."""
+    try:
+        result = _get_power_manager().cancel_pending_action()
+        return {
+            "status": "success" if result.success else "failed",
+            "message": result.message
+        }
+    except Exception as e:
+        logger.error(f"Cancel power action error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ── Network Management Endpoints ─────────────────────────────────────────────
+
+@app.get("/api/os/network/state")
+async def os_network_state(user=Depends(verify_token)):
+    """Get current network state including interfaces and WiFi."""
+    try:
+        manager = _get_network_manager()
+        snapshot = manager.snapshot()
+        
+        # Convert dataclass to dict for JSON serialization
+        interfaces_data = []
+        for iface in snapshot.connected_interfaces:
+            interfaces_data.append({
+                "name": iface.name,
+                "connection_type": iface.connection_type.value,
+                "is_connected": iface.is_connected,
+                "ip_address": iface.ip_address,
+                "mac_address": iface.mac_address,
+                "bytes_sent": iface.bytes_sent,
+                "bytes_recv": iface.bytes_recv
+            })
+        
+        wifi_data = []
+        for network in snapshot.wifi_networks:
+            wifi_data.append({
+                "ssid": network.ssid,
+                "signal_strength": network.signal_strength,
+                "security": network.security,
+                "frequency": network.frequency,
+                "channel": network.channel
+            })
+        
+        return {
+            "status": "success",
+            "data": {
+                "active_interfaces": snapshot.active_interfaces,
+                "connected_interfaces": interfaces_data,
+                "default_gateway": snapshot.default_gateway,
+                "dns_servers": snapshot.dns_servers,
+                "wifi_enabled": snapshot.wifi_enabled,
+                "wifi_networks": wifi_data,
+                "current_ssid": snapshot.current_ssid,
+                "vpn_connected": snapshot.vpn_connected,
+                "total_bytes_sent": snapshot.total_bytes_sent,
+                "total_bytes_recv": snapshot.total_bytes_recv
+            }
+        }
+    except Exception as e:
+        logger.error(f"Network state error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/os/network/interfaces")
+async def os_network_interfaces(user=Depends(verify_token)):
+    """List all network interfaces with detailed information."""
+    try:
+        manager = _get_network_manager()
+        snapshot = manager.snapshot()
+        
+        interfaces_data = []
+        for iface in snapshot.connected_interfaces:
+            interfaces_data.append({
+                "name": iface.name,
+                "connection_type": iface.connection_type.value,
+                "is_connected": iface.is_connected,
+                "ip_address": iface.ip_address,
+                "gateway": iface.gateway,
+                "netmask": iface.netmask,
+                "mac_address": iface.mac_address,
+                "stats": {
+                    "bytes_sent": iface.bytes_sent,
+                    "bytes_recv": iface.bytes_recv,
+                    "packets_sent": iface.packets_sent,
+                    "packets_recv": iface.packets_recv
+                }
+            })
+        
+        return {
+            "status": "success",
+            "count": len(interfaces_data),
+            "interfaces": interfaces_data
+        }
+    except Exception as e:
+        logger.error(f"Network interfaces error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/os/network/wifi/scan")
+async def os_network_wifi_scan(user=Depends(verify_token)):
+    """Scan for available WiFi networks."""
+    try:
+        manager = _get_network_manager()
+        snapshot = manager.snapshot()
+        
+        wifi_data = []
+        for network in snapshot.wifi_networks:
+            wifi_data.append({
+                "ssid": network.ssid,
+                "signal_strength": network.signal_strength,
+                "signal_bars": max(1, round(network.signal_strength / 25)),  # Convert to 1-4 bars
+                "security": network.security,
+                "frequency": network.frequency,
+                "channel": network.channel
+            })
+        
+        return {
+            "status": "success",
+            "wifi_enabled": snapshot.wifi_enabled,
+            "current_ssid": snapshot.current_ssid,
+            "count": len(wifi_data),
+            "networks": wifi_data
+        }
+    except Exception as e:
+        logger.error(f"WiFi scan error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/os/network/capabilities")
+async def os_network_capabilities(user=Depends(verify_token)):
+    """Get network system capabilities."""
+    try:
+        manager = _get_network_manager()
+        capabilities = manager.capability_matrix()
+        
+        return {
+            "status": "success",
+            "capabilities": capabilities
+        }
+    except Exception as e:
+        logger.error(f"Network capabilities error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# Voice Manager Endpoints
+def _get_voice_manager() -> VoiceManager:
+    """Get VoiceManager singleton instance."""
+    return VoiceManager()
+
+
+class VoiceSpeakRequest(BaseModel):
+    """Request model for TTS.."""
+    text: str
+
+
+class VoiceWakeWordRequest(BaseModel):
+    """Request model for wake word control."""
+    enable: bool
+    word: Optional[str] = None
+
+
+@app.get("/api/os/voice/state")
+async def os_voice_state(user=Depends(verify_token)):
+    """Get current voice system state."""
+    try:
+        manager = _get_voice_manager()
+        state = manager.state()
+        
+        return {
+            "status": "success",
+            "state": {
+                "mode": state.mode.value,
+                "listening": state.listening,
+                "wake_word_enabled": state.wake_word_enabled,
+                "wake_word": state.wake_word,
+                "microphones": state.microphones,
+                "speakers": state.speakers,
+                "average_confidence": round(state.average_confidence, 3),
+                "last_command": {
+                    "text": state.last_command.text if state.last_command else None,
+                    "confidence": round(state.last_command.confidence, 3) if state.last_command else None,
+                    "timestamp": state.last_command.timestamp if state.last_command else None,
+                } if state.last_command else None,
+                "last_response": {
+                    "text": state.last_response.text if state.last_response else None,
+                    "status": state.last_response.status if state.last_response else None,
+                    "timestamp": state.last_response.timestamp if state.last_response else None,
+                } if state.last_response else None,
+            }
+        }
+    except Exception as e:
+        logger.error(f"Voice state error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/os/voice/listen")
+async def os_voice_listen(user=Depends(verify_token)):
+    """Listen for voice command and process it through JARVIS."""
+    try:
+        manager = _get_voice_manager()
+        command = manager.listen_for_command(timeout=10)
+        
+        if command:
+            router = _get_voice_router()
+            response_text = await router.handle_voice_command(command.text)
+            return {
+                "status": "success",
+                "command": {
+                    "text": command.text,
+                    "confidence": round(command.confidence, 3),
+                    "language": command.language,
+                    "duration_ms": command.duration_ms,
+                    "timestamp": command.timestamp,
+                },
+                "response": response_text,
+            }
+        else:
+            return {
+                "status": "no_command",
+                "command": None
+            }
+    except Exception as e:
+        logger.error(f"Voice listen error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/os/voice/speak")
+async def os_voice_speak(request: VoiceSpeakRequest, user=Depends(verify_token)):
+    """Convert text to speech and play."""
+    try:
+        manager = _get_voice_manager()
+        response = manager.speak_response(request.text)
+        
+        return {
+            "status": "success",
+            "response": {
+                "text": response.text,
+                "duration_ms": response.duration_ms,
+                "status": response.status,
+                "timestamp": response.timestamp,
+            }
+        }
+    except Exception as e:
+        logger.error(f"Voice speak error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/os/voice/wake-word")
+async def os_voice_wake_word(request: VoiceWakeWordRequest, user=Depends(verify_token)):
+    """Enable or disable wake word detection."""
+    try:
+        manager = _get_voice_manager()
+        
+        if request.enable:
+            wake_word = request.word or "jarvis"
+            manager.enable_wake_word(wake_word)
+            return {
+                "status": "success",
+                "message": f"Wake word '{wake_word}' enabled"
+            }
+        else:
+            manager.disable_wake_word()
+            return {
+                "status": "success",
+                "message": "Wake word disabled"
+            }
+    except Exception as e:
+        logger.error(f"Wake word error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/os/voice/capabilities")
+async def os_voice_capabilities(user=Depends(verify_token)):
+    """Get voice system capabilities."""
+    try:
+        manager = _get_voice_manager()
+        capabilities = manager.capability_matrix()
+        
+        return {
+            "status": "success",
+            "capabilities": capabilities
+        }
+    except Exception as e:
+        logger.error(f"Voice capabilities error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @app.get("/api/llm/status")
 async def llm_status():
     """LLM availability check"""
@@ -1075,6 +1845,110 @@ async def llm_status():
             "capabilities": ["operator_commands", "basic_chat", "code_templates"],
         },
     }
+
+
+# ── Phase 3 Voice Analytics Endpoints ────────────────────────────────────────
+
+@app.get("/api/voice/history")
+async def get_voice_history(limit: int = 10, user=Depends(verify_token)):
+    """Get recent voice command history with filtering options."""
+    try:
+        router = _get_voice_router()
+        history = router.get_history(limit)
+        
+        history_data = []
+        for entry in history:
+            history_data.append({
+                "command": entry.command_text,
+                "response": entry.response_text,
+                "confidence": entry.confidence,
+                "status": entry.status.value,
+                "duration_ms": entry.duration_ms,
+                "timestamp": entry.timestamp.isoformat(),
+            })
+        
+        return {
+            "status": "success",
+            "total_entries": len(history_data),
+            "history": history_data,
+        }
+    except Exception as e:
+        logger.error(f"Voice history error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/voice/stats")
+async def get_voice_stats(user=Depends(verify_token)):
+    """Get voice command performance statistics."""
+    try:
+        router = _get_voice_router()
+        history_mgr = router.history_manager
+        perf_mgr = router.performance_monitor
+        
+        stats = history_mgr.get_stats()
+        perf_stats = perf_mgr.get_stats("voice_command")
+        
+        return {
+            "status": "success",
+            "history_stats": {
+                "total_entries": stats.get("total_entries", 0),
+                "success_rate": round(stats.get("success_rate_overall", 0), 3),
+                "avg_latency_ms": round(stats.get("avg_latency_ms", 0), 2),
+                "avg_confidence": round(stats.get("avg_confidence", 0), 3),
+                "execution": stats.get("status_distribution", {}).get("EXECUTED", 0),
+                "failed": stats.get("status_distribution", {}).get("FAILED", 0),
+            },
+            "performance_stats": {
+                "count": perf_stats.get("count", 0),
+                "success_rate": round(perf_stats.get("success_rate", 0), 3),
+                "avg_duration_ms": round(perf_stats.get("avg_duration_ms", 0), 2),
+                "p95_duration_ms": round(perf_stats.get("p95_duration_ms", 0), 2),
+            }
+        }
+    except Exception as e:
+        logger.error(f"Voice stats error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/voice/context")
+async def get_voice_context(user=Depends(verify_token)):
+    """Get current conversation context and session info."""
+    try:
+        router = _get_voice_router()
+        summary = router.get_session_summary()
+        
+        return {
+            "status": "success",
+            "session": summary,
+        }
+    except Exception as e:
+        logger.error(f"Voice context error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.delete("/api/voice/history")
+async def clear_voice_history(older_than_hours: int = 24, user=Depends(verify_token)):
+    """Clear voice history older than specified hours."""
+    try:
+        router = _get_voice_router()
+        history_mgr = router.history_manager
+        
+        # Convert hours to minutes
+        older_than_minutes = older_than_hours * 60 if older_than_hours > 0 else None
+        
+        # Clear with time filtering
+        cleared_count = history_mgr.clear_history(older_than_minutes)
+        remaining_count = len(history_mgr)
+        
+        return {
+            "status": "success",
+            "cleared_count": cleared_count,
+            "remaining_count": remaining_count,
+            "older_than_hours": older_than_hours,
+        }
+    except Exception as e:
+        logger.error(f"Voice history clear error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 if __name__ == "__main__":

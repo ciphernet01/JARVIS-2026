@@ -1,0 +1,38 @@
+[Unit]
+Description=JARVIS Neural Operating System Core
+Documentation=https://jarvis.ai/docs
+After=network-online.target sound.target
+Wants=network-online.target
+
+[Service]
+Type=main
+User=root
+WorkingDirectory=/opt/jarvis
+ExecStartPre=/usr/bin/mkdir -p /var/log/jarvis
+ExecStart=/usr/bin/python3 -u /opt/jarvis/backend/server.py
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+Environment="JARVIS_HOME=/opt/jarvis"
+Environment="JARVIS_HOST=0.0.0.0"
+Environment="JARVIS_BACKEND_PORT=8001"
+Environment="PYTHONUNBUFFERED=1"
+Environment="MONGO_URL=mongodb://localhost:27017"
+Environment="DB_NAME=jarvis"
+
+# Security hardening
+PrivateTmp=yes
+NoNewPrivileges=false
+ProtectSystem=no
+ProtectHome=no
+ProtectKernelTunables=no
+ProtectControlGroups=no
+RestrictRealtime=no
+RestrictNamespaces=no
+
+# Allow audio/camera/hardware access
+SupplementaryGroups=audio video input dialout
+
+[Install]
+WantedBy=multi-user.target

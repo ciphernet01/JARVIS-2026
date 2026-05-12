@@ -1,0 +1,14 @@
+/etc/jarvis/*
+/var/lib/jarvis/*
+/var/log/jarvis/*
+/var/cache/jarvis/*
+*.pyc
+__pycache__/
+.pytest_cache/
+*.egg-info/
+dist/
+build/
+.venv/
+*.iso
+*.iso.md5
+*.iso.sha256
