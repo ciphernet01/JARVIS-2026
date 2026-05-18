@@ -1,0 +1,53 @@
+{
+  "created_at": "2026-05-16T21:00:10.817654+00:00",
+  "duration_seconds": 1.0,
+  "id": "performance-baseline-20260516T210010Z-002",
+  "interval_seconds": 1.0,
+  "label": "saved-baseline",
+  "notes": "",
+  "overall_status": "pass",
+  "sample_count": 2,
+  "samples": [
+    {
+      "elapsed_ms": 0,
+      "handle_count": null,
+      "operation_latency_ms": 50,
+      "operation_success": true,
+      "process_cpu_percent": 10,
+      "process_rss_mb": 100,
+      "system_memory_percent": 40,
+      "thread_count": 8,
+      "timestamp": "2026-05-17T00:00:00+00:00"
+    },
+    {
+      "elapsed_ms": 0,
+      "handle_count": null,
+      "operation_latency_ms": 50,
+      "operation_success": true,
+      "process_cpu_percent": 10,
+      "process_rss_mb": 102,
+      "system_memory_percent": 40,
+      "thread_count": 8,
+      "timestamp": "2026-05-17T00:00:00+00:00"
+    }
+  ],
+  "summary": {
+    "cpu_avg_percent": 10.0,
+    "cpu_max_percent": 10.0,
+    "handle_end": null,
+    "handle_growth": null,
+    "handle_start": null,
+    "operation_count": 2,
+    "operation_latency_avg_ms": 50.0,
+    "operation_latency_max_ms": 50.0,
+    "operation_success_rate": 1.0,
+    "rss_end_mb": 102,
+    "rss_growth_mb": 2,
+    "rss_max_mb": 102.0,
+    "rss_start_mb": 100,
+    "system_memory_max_percent": 40.0,
+    "thread_end": 8,
+    "thread_growth": 0,
+    "thread_start": 8
+  }
+}

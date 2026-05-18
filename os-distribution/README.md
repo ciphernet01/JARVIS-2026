@@ -75,6 +75,36 @@ chmod +x build-iso.sh
 - Complete voice enrollment
 - System ready for interaction
 
+## Phase 7 Operator Documents
+
+Use these documents for release-candidate distribution and support:
+
+- `RELEASE_NOTES.md` - current release-candidate scope, evidence requirements, and known warnings
+- `USER_MANUAL.md` - operator startup, safety, recovery, validation, and troubleshooting guide
+- `PATCH_UPDATE_PROCESS.md` - reversible patch process with required validation gates
+- `SUPPORT_WORKFLOW.md` - triage levels, intake checklist, escalation package, and closure checklist
+- `VERSION.json` - current package metadata for release-candidate builds
+
+Current readiness should be judged from `ROADMAP_CURRENT_STATUS.md` plus the latest saved release evidence bundle under `test_reports/release_evidence/`.
+
+Generate packaging metadata:
+
+```powershell
+python generate_release_manifest.py --notes "release candidate manifest"
+```
+
+Plan a patch from two manifests:
+
+```powershell
+python plan_update.py os-distribution/manifests/current.json os-distribution/manifests/candidate.json
+```
+
+Dry-run a manifest-backed patch payload:
+
+```powershell
+python apply_update.py os-distribution/manifests/current.json os-distribution/manifests/candidate.json candidate-payload
+```
+
 ## System Components
 
 | Component | Role | Status |
@@ -105,12 +135,15 @@ chmod +x build-iso.sh
 
 ## Development
 
-All code is production-ready with:
-- 96 passing tests
-- 19 REST API endpoints
-- Cross-platform OS abstractions
-- Enterprise-grade error handling
-- Full audit logging capability
+The active release-candidate workflow includes:
+
+- Focused service tests
+- Frontend production build
+- Security audit
+- Performance baseline
+- Failover drill
+- Release evidence bundle
+- Target-machine hardware validation and stress reports
 
 ## Next Steps
 

@@ -1,5 +1,5 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Activity, Cpu, HardDrive, Network, Play, RefreshCw, Search, ShieldCheck, MonitorSmartphone, Camera, Mic, BatteryCharging, Volume2, Wifi, WifiOff, Globe } from 'lucide-react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Activity, Cpu, HardDrive, Network, Play, RefreshCw, Search, ShieldCheck, MonitorSmartphone, Camera, Mic, BatteryCharging, Volume2, Wifi, WifiOff, Globe, Square, Rocket } from 'lucide-react';
 
 function StatCard({ label, value, sublabel, icon: Icon }) {
   return (
@@ -14,10 +14,26 @@ function StatCard({ label, value, sublabel, icon: Icon }) {
   );
 }
 
-export default function SystemControlPanel({ api, token }) {
+async function readResponse(resp) {
+  const text = await resp.text();
+  if (!text) return {};
+  try {
+    return JSON.parse(text);
+  } catch {
+    return { response: text };
+  }
+}
+
+function actionError(scope, resp, data, fallback) {
+  const detail = data?.detail || data?.error || data?.message || data?.response || fallback;
+  return `${scope}: ${detail}${resp ? ` (${resp.status})` : ''}`;
+}
+
+export default function SystemControlPanel({ api, token, dashboardMetrics, telemetryFetching = false, refreshSeconds = 5 }) {
   const [status, setStatus] = useState(null);
   const [processes, setProcesses] = useState([]);
   const [services, setServices] = useState([]);
+  const [apps, setApps] = useState([]);
   const [devices, setDevices] = useState(null);
   const [command, setCommand] = useState('');
   const [commandResult, setCommandResult] = useState(null);
@@ -37,93 +53,179 @@ export default function SystemControlPanel({ api, token }) {
   const [voiceListening, setVoiceListening] = useState(false);
   const [voiceListenBusy, setVoiceListenBusy] = useState(false);
   const [voiceTranscription, setVoiceTranscription] = useState(null);
+  const [selectedApp, setSelectedApp] = useState('');
+  const [appLaunchPlan, setAppLaunchPlan] = useState(null);
+  const [appBusy, setAppBusy] = useState(false);
+  const [serviceForm, setServiceForm] = useState({ name: '', command: '', directory: '.', port: '' });
+  const [servicePlan, setServicePlan] = useState(null);
+  const [serviceBusy, setServiceBusy] = useState(false);
+
+  const [fetchError, setFetchError] = useState(null);
+  const refreshInFlight = useRef(false);
+  const lastFullRefreshAt = useRef(0);
 
   const fetchStatus = useCallback(async () => {
-    const resp = await fetch(`${api}/api/os/status`, {
-      headers: { 'X-JARVIS-TOKEN': token, 'Content-Type': 'application/json' },
-    });
-    const data = await resp.json();
-    if (resp.ok) setStatus(data);
-  }, [api, token]);
+    if (dashboardMetrics && telemetryFetching) return;
+    try {
+      const resp = await fetch(`${api}/api/os/status`, {
+        headers: { 'X-JARVIS-TOKEN': token, 'Content-Type': 'application/json' },
+      });
+      if (resp.ok) {
+        setStatus(await resp.json());
+        return;
+      }
+      const data = await readResponse(resp);
+      setFetchError(actionError('OS status unavailable', resp, data, 'Unable to refresh status'));
+    } catch (e) { setFetchError(`OS status unavailable: ${e.message}`); }
+  }, [api, token, dashboardMetrics, telemetryFetching]);
 
   const fetchProcesses = useCallback(async () => {
-    const resp = await fetch(`${api}/api/os/processes?limit=60`, {
-      headers: { 'X-JARVIS-TOKEN': token, 'Content-Type': 'application/json' },
-    });
-    const data = await resp.json();
-    if (resp.ok) setProcesses(data.processes || []);
+    try {
+      const resp = await fetch(`${api}/api/os/processes?limit=60`, {
+        headers: { 'X-JARVIS-TOKEN': token, 'Content-Type': 'application/json' },
+      });
+      if (resp.ok) {
+        const data = await resp.json();
+        setProcesses(data.processes || []);
+      }
+    } catch (e) { /* silent */ }
   }, [api, token]);
 
   const fetchServices = useCallback(async () => {
-    const resp = await fetch(`${api}/api/os/services`, {
-      headers: { 'X-JARVIS-TOKEN': token, 'Content-Type': 'application/json' },
-    });
-    const data = await resp.json();
-    if (resp.ok) setServices(data.services || []);
+    try {
+      const resp = await fetch(`${api}/api/os/services`, {
+        headers: { 'X-JARVIS-TOKEN': token, 'Content-Type': 'application/json' },
+      });
+      if (resp.ok) {
+        const data = await resp.json();
+        setServices(data.services || []);
+      }
+    } catch (e) { /* silent */ }
+  }, [api, token]);
+
+  const fetchApps = useCallback(async () => {
+    try {
+      const resp = await fetch(`${api}/api/os/apps`, {
+        headers: { 'X-JARVIS-TOKEN': token, 'Content-Type': 'application/json' },
+      });
+      if (resp.ok) {
+        const data = await resp.json();
+        const nextApps = data.apps || [];
+        setApps(nextApps);
+        setSelectedApp((current) => current || nextApps[0]?.id || '');
+      }
+    } catch (e) { /* silent */ }
   }, [api, token]);
 
   const fetchDevices = useCallback(async () => {
-    const resp = await fetch(`${api}/api/os/devices`, {
-      headers: { 'X-JARVIS-TOKEN': token, 'Content-Type': 'application/json' },
-    });
-    const data = await resp.json();
-    if (resp.ok) setDevices(data);
+    try {
+      const resp = await fetch(`${api}/api/os/devices`, {
+        headers: { 'X-JARVIS-TOKEN': token, 'Content-Type': 'application/json' },
+      });
+      if (resp.ok) setDevices(await resp.json());
+    } catch (e) { /* silent */ }
   }, [api, token]);
 
   const fetchAudio = useCallback(async () => {
-    const resp = await fetch(`${api}/api/os/audio/snapshot`, {
-      headers: { 'X-JARVIS-TOKEN': token, 'Content-Type': 'application/json' },
-    });
-    const data = await resp.json();
-    if (resp.ok) setAudio(data);
+    try {
+      const resp = await fetch(`${api}/api/os/audio/snapshot`, {
+        headers: { 'X-JARVIS-TOKEN': token, 'Content-Type': 'application/json' },
+      });
+      if (resp.ok) setAudio(await resp.json());
+    } catch (e) { /* silent */ }
   }, [api, token]);
 
   const fetchCamera = useCallback(async () => {
-    const resp = await fetch(`${api}/api/os/camera/state`, {
-      headers: { 'X-JARVIS-TOKEN': token, 'Content-Type': 'application/json' },
-    });
-    const data = await resp.json();
-    if (resp.ok) setCamera(data);
+    try {
+      const resp = await fetch(`${api}/api/os/camera/state`, {
+        headers: { 'X-JARVIS-TOKEN': token, 'Content-Type': 'application/json' },
+      });
+      if (resp.ok) setCamera(await resp.json());
+    } catch (e) { /* silent */ }
   }, [api, token]);
 
   const fetchPower = useCallback(async () => {
-    const resp = await fetch(`${api}/api/os/power/state`, {
-      headers: { 'X-JARVIS-TOKEN': token, 'Content-Type': 'application/json' },
-    });
-    const data = await resp.json();
-    if (resp.ok) setPower(data);
+    try {
+      const resp = await fetch(`${api}/api/os/power/state`, {
+        headers: { 'X-JARVIS-TOKEN': token, 'Content-Type': 'application/json' },
+      });
+      if (resp.ok) setPower(await resp.json());
+    } catch (e) { /* silent */ }
   }, [api, token]);
 
   const fetchNetwork = useCallback(async () => {
-    const resp = await fetch(`${api}/api/os/network/state`, {
-      headers: { 'X-JARVIS-TOKEN': token, 'Content-Type': 'application/json' },
-    });
-    const data = await resp.json();
-    if (resp.ok) setNetwork(data);
+    try {
+      const resp = await fetch(`${api}/api/os/network/state`, {
+        headers: { 'X-JARVIS-TOKEN': token, 'Content-Type': 'application/json' },
+      });
+      if (resp.ok) setNetwork(await resp.json());
+    } catch (e) { /* silent */ }
   }, [api, token]);
 
   const fetchVoice = useCallback(async () => {
-    const resp = await fetch(`${api}/api/os/voice/state`, {
-      headers: { 'X-JARVIS-TOKEN': token, 'Content-Type': 'application/json' },
-    });
-    const data = await resp.json();
-    if (resp.ok) setVoice(data);
+    try {
+      const resp = await fetch(`${api}/api/os/voice/state`, {
+        headers: { 'X-JARVIS-TOKEN': token, 'Content-Type': 'application/json' },
+      });
+      if (resp.ok) setVoice(await resp.json());
+    } catch (e) { /* silent */ }
   }, [api, token]);
 
   const refreshAll = useCallback(async () => {
+    if (refreshInFlight.current) return;
+    const now = Date.now();
+    if (now - lastFullRefreshAt.current < 1200) return;
+    refreshInFlight.current = true;
+    lastFullRefreshAt.current = now;
     setLoading(true);
+    setFetchError(null);
     try {
-      await Promise.all([fetchStatus(), fetchProcesses(), fetchServices(), fetchDevices(), fetchAudio(), fetchCamera(), fetchPower(), fetchNetwork(), fetchVoice()]);
+      await Promise.all([
+        dashboardMetrics && status ? Promise.resolve() : fetchStatus(),
+        fetchProcesses(),
+        fetchServices(),
+        fetchApps(),
+        fetchDevices(),
+        fetchAudio(),
+        fetchCamera(),
+        fetchPower(),
+        fetchNetwork(),
+        fetchVoice()
+      ]);
+    } catch (err) {
+      setFetchError(`OS Control sync failed: ${err.message}`);
     } finally {
+      refreshInFlight.current = false;
       setLoading(false);
     }
-  }, [fetchDevices, fetchProcesses, fetchServices, fetchStatus, fetchAudio, fetchCamera, fetchPower, fetchNetwork, fetchVoice]);
+  }, [fetchDevices, fetchProcesses, fetchServices, fetchApps, fetchStatus, fetchAudio, fetchCamera, fetchPower, fetchNetwork, fetchVoice, dashboardMetrics, status]);
 
   useEffect(() => {
+    let active = true;
     refreshAll();
-    const interval = setInterval(refreshAll, 5000);
-    return () => clearInterval(interval);
-  }, [refreshAll]);
+    const interval = setInterval(() => {
+      if (active) refreshAll();
+    }, Math.max(3, Math.min(30, refreshSeconds)) * 1000);
+    return () => {
+      active = false;
+      clearInterval(interval);
+    };
+  }, [refreshAll, refreshSeconds]);
+
+  const panelStatus = useMemo(() => {
+    if (!dashboardMetrics) return status;
+    return {
+      cpu_percent: dashboardMetrics.cpu?.percent,
+      memory_percent: dashboardMetrics.memory?.percent,
+      memory_available_gb: dashboardMetrics.memory?.available_gb,
+      memory_total_gb: dashboardMetrics.memory?.total_gb,
+      disk_percent: dashboardMetrics.disk?.percent,
+      disk_free_gb: dashboardMetrics.disk?.free_gb,
+      disk_total_gb: dashboardMetrics.disk?.total_gb,
+      platform: dashboardMetrics.platform,
+      service_state: status?.service_state,
+    };
+  }, [dashboardMetrics, status]);
 
   const filteredProcesses = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -146,13 +248,76 @@ export default function SystemControlPanel({ api, token }) {
         headers: { 'Content-Type': 'application/json', 'X-JARVIS-TOKEN': token },
         body: JSON.stringify({ command: text, dry_run: false }),
       });
-      const data = await resp.json();
-      setCommandResult(data);
-      await refreshAll();
+      const data = await readResponse(resp);
+      if (!resp.ok || data.error) {
+        setCommandResult({ handled: false, intent: 'command_error', response: actionError('OS command failed', resp, data, 'Command could not be executed') });
+      } else {
+        setCommandResult(data);
+        await refreshAll();
+      }
     } catch (error) {
-      setCommandResult({ handled: false, intent: 'error', response: error.message });
+      setCommandResult({ handled: false, intent: 'command_error', response: `OS command failed: ${error.message}` });
     } finally {
       setBusy(false);
+    }
+  };
+
+  const launchApp = async (dryRun = true) => {
+    if (!selectedApp) return;
+    setAppBusy(true);
+    setCommandResult(null);
+    try {
+      const resp = await fetch(`${api}/api/os/apps/launch`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-JARVIS-TOKEN': token },
+        body: JSON.stringify({ app: selectedApp, dry_run: dryRun, confirmed: !dryRun }),
+      });
+      const data = await readResponse(resp);
+      setAppLaunchPlan(data);
+      setCommandResult({
+        handled: resp.ok && data.success,
+        intent: dryRun ? 'app_launch_plan' : 'app_launch',
+        response: data.message || (resp.ok ? 'App launch request complete.' : 'App launch failed.'),
+      });
+    } catch (error) {
+      setCommandResult({ handled: false, intent: 'app_launch_error', response: `App launch failed: ${error.message}` });
+    } finally {
+      setAppBusy(false);
+    }
+  };
+
+  const serviceAction = async (action, service = null, dryRun = true) => {
+    const name = service?.name || serviceForm.name.trim();
+    if (!name) return;
+    setServiceBusy(true);
+    setCommandResult(null);
+    try {
+      const body = {
+        action,
+        name,
+        command: action === 'start' ? serviceForm.command.trim() : undefined,
+        directory: action === 'start' ? serviceForm.directory.trim() || '.' : undefined,
+        port: action === 'start' && serviceForm.port ? parseInt(serviceForm.port, 10) : undefined,
+        dry_run: dryRun,
+        confirmed: !dryRun,
+      };
+      const resp = await fetch(`${api}/api/os/services/action`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-JARVIS-TOKEN': token },
+        body: JSON.stringify(body),
+      });
+      const data = await readResponse(resp);
+      if (dryRun) setServicePlan(data);
+      setCommandResult({
+        handled: resp.ok && data.success,
+        intent: dryRun ? `service_${action}_plan` : `service_${action}`,
+        response: data.message || (resp.ok ? 'Service request complete.' : 'Service request failed.'),
+      });
+      await fetchServices();
+    } catch (error) {
+      setCommandResult({ handled: false, intent: 'service_error', response: `Service action failed: ${error.message}` });
+    } finally {
+      setServiceBusy(false);
     }
   };
 
@@ -166,9 +331,12 @@ export default function SystemControlPanel({ api, token }) {
       });
       if (resp.ok) {
         await fetchAudio();
+      } else {
+        const data = await readResponse(resp);
+        setCommandResult({ handled: false, intent: 'audio_error', response: actionError('Volume control failed', resp, data, 'Unable to set volume') });
       }
     } catch (error) {
-      console.error('Volume control error:', error);
+      setCommandResult({ handled: false, intent: 'audio_error', response: `Volume control failed: ${error.message}` });
     }
   };
 
@@ -182,9 +350,12 @@ export default function SystemControlPanel({ api, token }) {
       });
       if (resp.ok) {
         await fetchAudio();
+      } else {
+        const data = await readResponse(resp);
+        setCommandResult({ handled: false, intent: 'audio_error', response: actionError('Microphone toggle failed', resp, data, 'Unable to change microphone state') });
       }
     } catch (error) {
-      console.error('Microphone toggle error:', error);
+      setCommandResult({ handled: false, intent: 'audio_error', response: `Microphone toggle failed: ${error.message}` });
     }
   };
 
@@ -196,9 +367,12 @@ export default function SystemControlPanel({ api, token }) {
       });
       if (resp.ok) {
         await fetchCamera();
+      } else {
+        const data = await readResponse(resp);
+        setCommandResult({ handled: false, intent: 'camera_error', response: actionError('Camera enable failed', resp, data, 'Unable to enable camera') });
       }
     } catch (error) {
-      console.error('Camera enable error:', error);
+      setCommandResult({ handled: false, intent: 'camera_error', response: `Camera enable failed: ${error.message}` });
     }
   };
 
@@ -210,9 +384,12 @@ export default function SystemControlPanel({ api, token }) {
       });
       if (resp.ok) {
         await fetchCamera();
+      } else {
+        const data = await readResponse(resp);
+        setCommandResult({ handled: false, intent: 'camera_error', response: actionError('Camera disable failed', resp, data, 'Unable to disable camera') });
       }
     } catch (error) {
-      console.error('Camera disable error:', error);
+      setCommandResult({ handled: false, intent: 'camera_error', response: `Camera disable failed: ${error.message}` });
     }
   };
 
@@ -226,9 +403,12 @@ export default function SystemControlPanel({ api, token }) {
       if (resp.ok) {
         const data = await resp.json();
         setSnapshot(data);
+      } else {
+        const data = await readResponse(resp);
+        setCommandResult({ handled: false, intent: 'camera_error', response: actionError('Snapshot capture failed', resp, data, 'Unable to capture snapshot') });
       }
     } catch (error) {
-      console.error('Snapshot capture error:', error);
+      setCommandResult({ handled: false, intent: 'camera_error', response: `Snapshot capture failed: ${error.message}` });
     } finally {
       setSnapshotBusy(false);
     }
@@ -244,9 +424,12 @@ export default function SystemControlPanel({ api, token }) {
       });
       if (resp.ok) {
         await fetchCamera();
+      } else {
+        const data = await readResponse(resp);
+        setCommandResult({ handled: false, intent: 'camera_error', response: actionError('Face detection toggle failed', resp, data, 'Unable to change face detection') });
       }
     } catch (error) {
-      console.error('Face detection toggle error:', error);
+      setCommandResult({ handled: false, intent: 'camera_error', response: `Face detection toggle failed: ${error.message}` });
     }
   };
 
@@ -259,7 +442,7 @@ export default function SystemControlPanel({ api, token }) {
         headers: { 'Content-Type': 'application/json', 'X-JARVIS-TOKEN': token },
         body: JSON.stringify({ action, confirmed: true }),
       });
-      const data = await resp.json();
+      const data = await readResponse(resp);
       if (resp.ok) {
         setCommandResult({
           handled: true,
@@ -267,9 +450,11 @@ export default function SystemControlPanel({ api, token }) {
           response: data.message
         });
         await fetchPower();
+      } else {
+        setCommandResult({ handled: false, intent: 'power_error', response: actionError('Power action failed', resp, data, 'Unable to complete power action') });
       }
     } catch (error) {
-      console.error('Power action error:', error);
+      setCommandResult({ handled: false, intent: 'power_error', response: `Power action failed: ${error.message}` });
     } finally {
       setPowerActionBusy(false);
     }
@@ -304,7 +489,7 @@ export default function SystemControlPanel({ api, token }) {
     }
   };
 
-  const killable = services.filter((service) => service.status === 'running');
+  const trackedServices = services;
 
   return (
     <div className="flex h-full flex-col overflow-hidden" data-testid="system-control-panel">
@@ -319,31 +504,36 @@ export default function SystemControlPanel({ api, token }) {
           <RefreshCw size={11} /> {loading ? 'Syncing' : 'Refresh'}
         </button>
       </div>
+      {fetchError && (
+        <div className="px-4 py-2 border-b border-red-500/20 bg-red-950/20 font-mono text-[10px] text-red-300" data-testid="os-control-error">
+          {fetchError}
+        </div>
+      )}
 
       <div className="grid grid-cols-4 gap-3 p-4 border-b border-cyan-900/20">
         <StatCard
           icon={Cpu}
           label="CPU"
-          value={status ? `${status.cpu_percent}%` : '—'}
-          sublabel={status ? `${status.platform}` : 'system unavailable'}
+          value={panelStatus?.cpu_percent !== undefined ? `${panelStatus.cpu_percent}%` : '-'}
+          sublabel={panelStatus ? `${panelStatus.platform || 'runtime telemetry'}` : 'system unavailable'}
         />
         <StatCard
           icon={Activity}
           label="Memory"
-          value={status ? `${status.memory_percent}%` : '—'}
-          sublabel={status ? `${status.memory_available_gb} GB free / ${status.memory_total_gb} GB total` : 'waiting for telemetry'}
+          value={panelStatus?.memory_percent !== undefined ? `${panelStatus.memory_percent}%` : '-'}
+          sublabel={panelStatus ? `${panelStatus.memory_available_gb} GB free / ${panelStatus.memory_total_gb} GB total` : 'waiting for telemetry'}
         />
         <StatCard
           icon={HardDrive}
           label="Disk"
-          value={status ? `${status.disk_percent}%` : '—'}
-          sublabel={status ? `${status.disk_free_gb} GB free / ${status.disk_total_gb} GB total` : 'waiting for telemetry'}
+          value={panelStatus?.disk_percent !== undefined ? `${panelStatus.disk_percent}%` : '-'}
+          sublabel={panelStatus ? `${panelStatus.disk_free_gb} GB free / ${panelStatus.disk_total_gb} GB total` : 'waiting for telemetry'}
         />
         <StatCard
           icon={Network}
           label="Services"
-          value={status?.service_state ? `${status.service_state.tracked_services}` : `${services.length}`}
-          sublabel={status?.service_state ? `${status.service_state.running_processes} active processes` : 'tracked runtime services'}
+          value={panelStatus?.service_state ? `${panelStatus.service_state.tracked_services}` : `${services.length}`}
+          sublabel={panelStatus?.service_state ? `${panelStatus.service_state.running_processes} active processes` : 'tracked runtime services'}
         />
       </div>
 
@@ -435,6 +625,103 @@ export default function SystemControlPanel({ api, token }) {
               <div className="border border-cyan-900/30 bg-black/30 p-3 text-[10px] font-mono text-cyan-100/90">
                 <div className="mb-1 text-cyan-400 uppercase tracking-widest">{commandResult.intent || 'result'}</div>
                 <div>{commandResult.response || commandResult.error || 'No response.'}</div>
+              </div>
+            )}
+          </div>
+
+          <div className="p-4 border-t border-cyan-900/20 space-y-3">
+            <div className="font-display text-[9px] tracking-widest uppercase text-cyan-300/50">App Launcher</div>
+            <div className="flex items-center gap-2">
+              <select
+                value={selectedApp}
+                onChange={(e) => {
+                  setSelectedApp(e.target.value);
+                  setAppLaunchPlan(null);
+                }}
+                className="flex-1 bg-black/50 border border-cyan-900/40 px-3 py-2 text-xs font-mono text-cyan-100 focus:border-cyan-500/60 focus:outline-none"
+                data-testid="app-launch-select"
+              >
+                {apps.map((app) => (
+                  <option key={app.id} value={app.id}>{app.label} / {app.executable}</option>
+                ))}
+              </select>
+              <button
+                onClick={() => launchApp(true)}
+                disabled={appBusy || !selectedApp}
+                className="flex items-center gap-2 px-3 py-2 border border-cyan-500/40 text-cyan-300 font-display text-[9px] tracking-wider uppercase hover:bg-cyan-950/30 disabled:opacity-40"
+                data-testid="app-launch-plan"
+              >
+                <Rocket size={12} /> Plan
+              </button>
+              <button
+                onClick={() => launchApp(false)}
+                disabled={appBusy || !appLaunchPlan?.success}
+                className="flex items-center gap-2 px-3 py-2 border border-green-500/40 text-green-300 font-display text-[9px] tracking-wider uppercase hover:bg-green-950/20 disabled:opacity-40"
+                data-testid="app-launch-execute"
+              >
+                <Play size={12} /> Launch
+              </button>
+            </div>
+            {appLaunchPlan && (
+              <div className="border border-cyan-900/30 bg-slate-950/30 p-2 font-mono text-[9px] text-cyan-300/60 break-all">
+                {appLaunchPlan.message} {appLaunchPlan.resolved ? `/ ${appLaunchPlan.resolved}` : ''}
+              </div>
+            )}
+          </div>
+
+          <div className="p-4 border-t border-cyan-900/20 space-y-3">
+            <div className="font-display text-[9px] tracking-widest uppercase text-cyan-300/50">Service Lifecycle</div>
+            <div className="grid grid-cols-2 gap-2">
+              <input
+                value={serviceForm.name}
+                onChange={(e) => setServiceForm((prev) => ({ ...prev, name: e.target.value }))}
+                placeholder="service name"
+                className="bg-black/50 border border-cyan-900/40 px-3 py-2 text-xs font-mono text-cyan-100 placeholder-cyan-900 focus:border-cyan-500/60 focus:outline-none"
+                data-testid="service-name-input"
+              />
+              <input
+                value={serviceForm.port}
+                onChange={(e) => setServiceForm((prev) => ({ ...prev, port: e.target.value }))}
+                placeholder="port"
+                className="bg-black/50 border border-cyan-900/40 px-3 py-2 text-xs font-mono text-cyan-100 placeholder-cyan-900 focus:border-cyan-500/60 focus:outline-none"
+                data-testid="service-port-input"
+              />
+            </div>
+            <input
+              value={serviceForm.command}
+              onChange={(e) => setServiceForm((prev) => ({ ...prev, command: e.target.value }))}
+              placeholder="command, e.g. npm.cmd run start"
+              className="w-full bg-black/50 border border-cyan-900/40 px-3 py-2 text-xs font-mono text-cyan-100 placeholder-cyan-900 focus:border-cyan-500/60 focus:outline-none"
+              data-testid="service-command-input"
+            />
+            <input
+              value={serviceForm.directory}
+              onChange={(e) => setServiceForm((prev) => ({ ...prev, directory: e.target.value }))}
+              placeholder="workspace-relative directory"
+              className="w-full bg-black/50 border border-cyan-900/40 px-3 py-2 text-xs font-mono text-cyan-100 placeholder-cyan-900 focus:border-cyan-500/60 focus:outline-none"
+              data-testid="service-directory-input"
+            />
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                onClick={() => serviceAction('start', null, true)}
+                disabled={serviceBusy || !serviceForm.name.trim() || !serviceForm.command.trim()}
+                className="px-3 py-2 border border-cyan-500/40 text-cyan-300 font-display text-[9px] tracking-wider uppercase hover:bg-cyan-950/30 disabled:opacity-40"
+                data-testid="service-plan-start"
+              >
+                Plan Start
+              </button>
+              <button
+                onClick={() => serviceAction('start', null, false)}
+                disabled={serviceBusy || !servicePlan?.success || servicePlan?.action !== 'start'}
+                className="px-3 py-2 border border-green-500/40 text-green-300 font-display text-[9px] tracking-wider uppercase hover:bg-green-950/20 disabled:opacity-40"
+                data-testid="service-execute-start"
+              >
+                Start Service
+              </button>
+            </div>
+            {servicePlan && (
+              <div className="border border-cyan-900/30 bg-slate-950/30 p-2 font-mono text-[9px] text-cyan-300/60">
+                {servicePlan.message}
               </div>
             )}
           </div>
@@ -776,16 +1063,38 @@ export default function SystemControlPanel({ api, token }) {
 
           <div className="flex-1 overflow-y-auto p-4 space-y-3">
             <div className="font-display text-[9px] tracking-widest uppercase text-cyan-300/50">Tracked Services</div>
-            {killable.length === 0 ? (
-              <div className="text-cyan-300/30 font-mono text-xs">No tracked services are currently running.</div>
+            {trackedServices.length === 0 ? (
+              <div className="text-cyan-300/30 font-mono text-xs">No tracked services are currently registered.</div>
             ) : (
-              killable.map((service) => (
+              trackedServices.map((service) => (
                 <div key={service.name} className="border border-cyan-900/20 p-3 flex items-center justify-between gap-3">
                   <div>
                     <div className="font-mono text-xs text-cyan-100">{service.name}</div>
                     <div className="font-mono text-[9px] text-cyan-300/35">PID {service.pid} • {service.directory || 'workspace root'}</div>
                   </div>
-                  <div className="font-mono text-[9px] uppercase tracking-widest text-green-400">Running</div>
+                  <div className="flex items-center gap-2">
+                    <div className={`font-mono text-[9px] uppercase tracking-widest ${service.status === 'running' ? 'text-green-400' : 'text-amber-400'}`}>
+                      {service.status || 'unknown'}
+                    </div>
+                    <button
+                      onClick={() => serviceAction('restart', service, false)}
+                      disabled={serviceBusy}
+                      className="p-1.5 border border-cyan-900/40 text-cyan-300/60 hover:text-cyan-300 disabled:opacity-40"
+                      title="Restart service"
+                      data-testid={`service-restart-${service.name}`}
+                    >
+                      <RefreshCw size={11} />
+                    </button>
+                    <button
+                      onClick={() => serviceAction('stop', service, false)}
+                      disabled={serviceBusy || service.status !== 'running'}
+                      className="p-1.5 border border-red-900/40 text-red-400/60 hover:text-red-300 disabled:opacity-40"
+                      title="Stop service"
+                      data-testid={`service-stop-${service.name}`}
+                    >
+                      <Square size={11} />
+                    </button>
+                  </div>
                 </div>
               ))
             )}

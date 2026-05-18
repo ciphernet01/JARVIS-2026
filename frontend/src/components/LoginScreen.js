@@ -2,6 +2,20 @@ import React, { useState, useEffect, useRef } from 'react';
 import { motion } from 'framer-motion';
 import { Scan, ShieldCheck, Camera, AlertTriangle } from 'lucide-react';
 
+async function readAuthResponse(resp) {
+  const text = await resp.text();
+  if (!text) return {};
+  try {
+    return JSON.parse(text);
+  } catch {
+    const summary = text.replace(/\s+/g, ' ').trim().slice(0, 120);
+    return {
+      success: false,
+      message: summary || `Authentication service returned ${resp.status}`,
+    };
+  }
+}
+
 export default function LoginScreen({ onLogin, api }) {
   const [status, setStatus] = useState('AWAITING BIOMETRIC INPUT');
   const [scanning, setScanning] = useState(false);
@@ -10,11 +24,16 @@ export default function LoginScreen({ onLogin, api }) {
   const [cameraError, setCameraError] = useState(null);
   const [faceBox, setFaceBox] = useState(null);
   const [faceInfo, setFaceInfo] = useState(null);
+  const [scanPhase, setScanPhase] = useState(0);
   const videoRef = useRef(null);
   const streamRef = useRef(null);
+  const scanTimerRef = useRef(null);
   useEffect(() => {
     initCamera();
     return () => {
+      if (scanTimerRef.current) {
+        clearInterval(scanTimerRef.current);
+      }
       if (streamRef.current) {
         streamRef.current.getTracks().forEach(t => t.stop());
       }
@@ -55,9 +74,20 @@ export default function LoginScreen({ onLogin, api }) {
 
   const startScan = async () => {
     setScanning(true);
+    setScanPhase(0);
     setStatus(cameraActive ? 'SCANNING BIOMETRICS...' : 'CAMERA OFFLINE. AUTHORIZING PRODUCTION BYPASS...');
     setFaceInfo(null);
     setFaceBox(null);
+    const scanStatuses = cameraActive
+      ? ['ALIGNING FACIAL GEOMETRY...', 'SAMPLING NEURAL SIGNATURE...', 'VALIDATING BIOMETRIC HASH...']
+      : ['CAMERA CHANNEL OFFLINE...', 'VALIDATING LOCAL PRODUCTION OVERRIDE...', 'ISSUING FALLBACK TOKEN...'];
+    scanTimerRef.current = setInterval(() => {
+      setScanPhase((phase) => {
+        const next = Math.min(phase + 1, scanStatuses.length - 1);
+        setStatus(scanStatuses[next]);
+        return next;
+      });
+    }, 500);
 
     const imageData = captureFrame();
     await new Promise(r => setTimeout(r, cameraActive ? 1500 : 600));
@@ -71,13 +101,14 @@ export default function LoginScreen({ onLogin, api }) {
           image: imageData,
         }),
       });
-      const data = await resp.json();
+      const data = await readAuthResponse(resp);
 
       if (data.face_box) {
         setFaceBox(data.face_box);
       }
 
       if (data.success) {
+        clearInterval(scanTimerRef.current);
         setStatus('ACCESS GRANTED');
         setGranted(true);
         setFaceInfo({ detected: data.face_detected, confidence: data.confidence });
@@ -86,7 +117,8 @@ export default function LoginScreen({ onLogin, api }) {
         }
         setTimeout(() => onLogin(data.token), 1800);
       } else {
-        setStatus(data.message || 'ACCESS DENIED');
+        clearInterval(scanTimerRef.current);
+        setStatus(resp.ok ? (data.message || 'ACCESS DENIED') : `AUTH SERVICE UNAVAILABLE: ${data.message || resp.status}`);
         setFaceInfo({
           detected: data.face_detected,
           confidence: data.confidence,
@@ -94,6 +126,7 @@ export default function LoginScreen({ onLogin, api }) {
         setScanning(false);
       }
     } catch (e) {
+      clearInterval(scanTimerRef.current);
       setStatus('NEURAL LINK ERROR: ' + e.message);
       setScanning(false);
     }
@@ -101,6 +134,7 @@ export default function LoginScreen({ onLogin, api }) {
 
   const handleBypass = async () => {
     setScanning(true);
+    setScanPhase(0);
     setStatus('AUTHORIZING PRODUCTION BYPASS...');
     try {
       const resp = await fetch(`${api}/api/auth/login`, {
@@ -111,7 +145,7 @@ export default function LoginScreen({ onLogin, api }) {
           image: null,
         }),
       });
-      const data = await resp.json();
+      const data = await readAuthResponse(resp);
       if (data.success) {
         setStatus('ACCESS GRANTED (BYPASS)');
         setGranted(true);
@@ -120,7 +154,7 @@ export default function LoginScreen({ onLogin, api }) {
         }
         setTimeout(() => onLogin(data.token), 1000);
       } else {
-        setStatus(data.message || 'BYPASS DENIED');
+        setStatus(resp.ok ? (data.message || 'BYPASS DENIED') : `AUTH SERVICE UNAVAILABLE: ${data.message || resp.status}`);
         setScanning(false);
       }
     } catch (e) {
@@ -232,12 +266,21 @@ export default function LoginScreen({ onLogin, api }) {
 
           {/* Scan line */}
           {scanning && (
-            <motion.div
-              className="absolute left-0 right-0 h-0.5 bg-cyan-400 z-30"
-              style={{ boxShadow: '0 0 12px #06b6d4, 0 0 24px #06b6d4' }}
-              animate={{ top: ['0%', '100%', '0%'] }}
-              transition={{ duration: 2, repeat: Infinity, ease: 'linear' }}
-            />
+            <>
+              <motion.div
+                className="absolute left-0 right-0 h-0.5 bg-cyan-400 z-30"
+                style={{ boxShadow: '0 0 12px #06b6d4, 0 0 24px #06b6d4' }}
+                animate={{ top: ['0%', '100%', '0%'] }}
+                transition={{ duration: 2, repeat: Infinity, ease: 'linear' }}
+              />
+              <div className="absolute bottom-3 left-4 right-4 z-30 h-1 border border-cyan-400/30 bg-black/60 overflow-hidden">
+                <motion.div
+                  className="h-full bg-cyan-400"
+                  animate={{ width: `${Math.max(25, (scanPhase + 1) * 33)}%` }}
+                  transition={{ duration: 0.25 }}
+                />
+              </div>
+            </>
           )}
 
           {/* Granted overlay */}
@@ -293,20 +336,24 @@ export default function LoginScreen({ onLogin, api }) {
               whileHover={{ scale: 1.02 }}
               whileTap={{ scale: 0.98 }}
               onClick={startScan}
-              className="px-8 py-3 border border-cyan-500/60 text-cyan-400 font-display text-xs tracking-[0.2em] uppercase hover:bg-cyan-950/40 hover:border-cyan-400 transition-all duration-200 w-full max-w-[280px]"
+              className={`px-8 py-3 border font-display text-xs tracking-[0.2em] uppercase transition-all duration-200 w-full max-w-[280px] ${
+                cameraActive ? 'border-cyan-500/60 text-cyan-400 hover:bg-cyan-950/40 hover:border-cyan-400' : 'border-amber-500/40 text-amber-400 hover:bg-amber-950/20'
+              }`}
               data-testid="login-scan-button"
             >
-              <span className="inline-flex items-center gap-2 justify-center">{cameraActive ? <Scan size={12} /> : <Scan size={12} />} {cameraActive ? 'Initialize Bio-Scan' : 'Enter JARVIS'}</span>
+              <span className="inline-flex items-center gap-2 justify-center">
+                <Scan size={12} /> {cameraActive ? 'Initialize Bio-Scan' : 'Attempt Force Entry'}
+              </span>
             </motion.button>
             
             <motion.button
               whileHover={{ scale: 1.02 }}
               whileTap={{ scale: 0.98 }}
               onClick={handleBypass}
-              className="px-8 py-2 border border-slate-600/60 text-slate-400 font-display text-[10px] tracking-[0.2em] uppercase hover:bg-slate-800/40 hover:text-cyan-400 hover:border-cyan-900/60 transition-all duration-200 w-full max-w-[280px]"
+              className="px-8 py-2 border border-cyan-900/50 text-cyan-300/45 bg-cyan-950/10 font-display text-[10px] tracking-[0.2em] uppercase hover:bg-cyan-950/30 hover:text-cyan-200 hover:border-cyan-500/50 hover:shadow-[0_0_24px_rgba(6,182,212,0.16)] transition-all duration-200 w-full max-w-[280px]"
               data-testid="login-bypass-button"
             >
-              Enable Override Bypass
+              Secure Protocol Override
             </motion.button>
           </div>
         )}

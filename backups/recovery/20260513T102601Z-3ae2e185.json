@@ -1,0 +1,54 @@
+{
+  "created_at": "2026-05-13T10:26:01.858050+00:00",
+  "id": "20260513T102601Z-3ae2e185",
+  "label": "roadmap-smoke-test",
+  "manifest_path": "backups\\recovery\\20260513T102601Z-3ae2e185.json",
+  "notes": "Created during roadmap Phase 3 smoke test.",
+  "state": {
+    "active_reasons": [],
+    "backup_available": false,
+    "checkpoint_count": 0,
+    "fallback_desktop_available": true,
+    "last_checkpoint_at": null,
+    "maintenance_shell_available": true,
+    "permission_escalation_required": true,
+    "platform_name": "Windows",
+    "recovery_mode": false,
+    "safe_mode": false,
+    "safety_gates": [
+      "confirm_power_actions",
+      "confirm_package_changes",
+      "confirm_service_lifecycle",
+      "workspace_path_boundary",
+      "audit_sensitive_actions"
+    ]
+  },
+  "tracked_files": [
+    {
+      "modified": "2026-05-12T03:14:58.510720+00:00",
+      "path": ".env",
+      "size": 96
+    },
+    {
+      "modified": "2026-05-10T17:17:43.269553+00:00",
+      "path": ".env.example",
+      "size": 4361
+    },
+    {
+      "modified": "2026-05-13T10:21:09.599971+00:00",
+      "path": "backend/server.py",
+      "size": 81903
+    },
+    {
+      "modified": "2026-05-10T17:17:43.274890+00:00",
+      "path": "frontend/package.json",
+      "size": 850
+    },
+    {
+      "modified": "2026-05-13T06:10:56.373276+00:00",
+      "path": "frontend/src/App.js",
+      "size": 1187
+    }
+  ],
+  "workspace_root": "C:\\JARVIS-2026"
+}

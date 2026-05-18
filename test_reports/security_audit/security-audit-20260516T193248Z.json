@@ -1,0 +1,78 @@
+{
+  "checks": [
+    {
+      "detail": "Weak placeholder secret(s): GEMINI_API_KEY, XAI_API_KEY, GROQ_API_KEY.",
+      "key": "env_file",
+      "label": "Environment File",
+      "recommendation": "Replace placeholders with high-entropy production secrets.",
+      "severity": "high",
+      "status": "fail"
+    },
+    {
+      "detail": "API currently allows wildcard origins.",
+      "key": "cors_policy",
+      "label": "CORS Policy",
+      "recommendation": "Restrict CORS origins for production builds.",
+      "severity": "high",
+      "status": "warn"
+    },
+    {
+      "detail": "2 active token(s) meet minimum length checks.",
+      "key": "session_tokens",
+      "label": "Session Tokens",
+      "recommendation": null,
+      "severity": "medium",
+      "status": "pass"
+    },
+    {
+      "detail": "5 safety gate(s) active.",
+      "key": "safety_gates",
+      "label": "Safety Gates",
+      "recommendation": null,
+      "severity": "high",
+      "status": "pass"
+    },
+    {
+      "detail": "2 audit artifact(s) found.",
+      "key": "audit_logging",
+      "label": "Audit Logging",
+      "recommendation": null,
+      "severity": "medium",
+      "status": "pass"
+    },
+    {
+      "detail": "Frontend dependency lockfile is present.",
+      "key": "dependency_lockfiles",
+      "label": "Dependency Lockfiles",
+      "recommendation": null,
+      "severity": "medium",
+      "status": "pass"
+    },
+    {
+      "detail": "Runtime artifact directorie(s) present: .tmp, test_reports.",
+      "key": "runtime_artifacts",
+      "label": "Runtime Artifacts",
+      "recommendation": "Clean or exclude runtime artifacts from production images.",
+      "severity": "low",
+      "status": "warn"
+    },
+    {
+      "detail": "No insecure sensitive file permissions detected.",
+      "key": "file_permissions",
+      "label": "Sensitive File Permissions",
+      "recommendation": null,
+      "severity": "medium",
+      "status": "pass"
+    }
+  ],
+  "duration_ms": 0,
+  "generated_at": "2026-05-16T19:32:48.822086+00:00",
+  "id": "security-audit-20260516T193248Z",
+  "overall_status": "fail",
+  "score": 0.75,
+  "summary": {
+    "fail": 1,
+    "pass": 5,
+    "warn": 2
+  }
+}

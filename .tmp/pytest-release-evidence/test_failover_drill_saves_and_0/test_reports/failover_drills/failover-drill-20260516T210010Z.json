@@ -1,0 +1,64 @@
+{
+  "checks": [
+    {
+      "detail": "1 checkpoint(s) available.",
+      "key": "recovery_checkpoint",
+      "label": "Recovery Checkpoint",
+      "recommendation": null,
+      "severity": "high",
+      "status": "pass"
+    },
+    {
+      "detail": "Maintenance shell and fallback desktop are available.",
+      "key": "fallback_controls",
+      "label": "Fallback Controls",
+      "recommendation": null,
+      "severity": "critical",
+      "status": "pass"
+    },
+    {
+      "detail": "Destructive command was blocked by safety gate.",
+      "key": "destructive_gate",
+      "label": "Destructive Command Gate",
+      "recommendation": null,
+      "severity": "critical",
+      "status": "pass"
+    },
+    {
+      "detail": "Mutating command requires explicit confirmation.",
+      "key": "mutation_confirmation",
+      "label": "Mutation Confirmation",
+      "recommendation": null,
+      "severity": "high",
+      "status": "pass"
+    },
+    {
+      "detail": "3 maintenance diagnostic(s) allowlisted.",
+      "key": "maintenance_shell",
+      "label": "Maintenance Shell",
+      "recommendation": null,
+      "severity": "medium",
+      "status": "pass"
+    },
+    {
+      "detail": "2 tracked service(s), 12 process(es) visible.",
+      "key": "service_inventory",
+      "label": "Service Inventory",
+      "recommendation": null,
+      "severity": "medium",
+      "status": "pass"
+    }
+  ],
+  "created_at": "2026-05-16T21:00:10.808613+00:00",
+  "duration_ms": 0,
+  "id": "failover-drill-20260516T210010Z",
+  "label": "saved-drill",
+  "notes": "",
+  "overall_status": "pass",
+  "score": 1.0,
+  "summary": {
+    "fail": 0,
+    "pass": 6,
+    "warn": 0
+  }
+}

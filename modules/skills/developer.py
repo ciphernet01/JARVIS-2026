@@ -6,10 +6,26 @@ Code manipulation and VS Code workspace integration
 import logging
 import os
 import subprocess
+from pathlib import Path
 from typing import Any, Dict, List
 from .base import Skill
+from modules.services.safety_manager import SafetyManager
 
 logger = logging.getLogger(__name__)
+
+
+def _workspace_root() -> Path:
+    return Path(os.getenv("JARVIS_WORKSPACE", os.getcwd())).resolve()
+
+
+def _workspace_path(filename: str) -> Path:
+    root = _workspace_root()
+    target = (root / filename).resolve()
+    try:
+        target.relative_to(root)
+    except ValueError as exc:
+        raise PermissionError("File operation escapes the workspace boundary") from exc
+    return target
 
 class FileManagementSkill(Skill):
     """Read, write, and manipulate source files."""
@@ -38,15 +54,15 @@ class FileManagementSkill(Skill):
                         filename = data[0].strip()
                         content = data[1].strip()
                         
-                        target_path = os.path.abspath(os.path.join(os.getcwd(), filename))
-                        os.makedirs(os.path.dirname(target_path), exist_ok=True)
+                        target_path = _workspace_path(filename)
+                        os.makedirs(target_path.parent, exist_ok=True)
                         with open(target_path, "w", encoding="utf-8") as f:
                             f.write(content)
                         return f"Successfully wrote to {filename}."
                         
             elif "read:" in query:
                 filename = query.split("read:")[1].strip()
-                target_path = os.path.abspath(os.path.join(os.getcwd(), filename))
+                target_path = _workspace_path(filename)
                 if os.path.exists(target_path):
                     with open(target_path, "r", encoding="utf-8") as f:
                         return f"File Content ({filename}):\n" + f.read()
@@ -74,8 +90,14 @@ class ExecuteCommandSkill(Skill):
     def execute(self, query: str, context: Dict[str, Any] = None) -> str:
         try:
             query = query.replace("execute:", "").strip()
+            context = context or {}
+            confirmed = bool(context.get("confirmed") or context.get("confirm"))
+            safety = SafetyManager(workspace_root=str(_workspace_root()))
+            decision = safety.evaluate_shell_command(query, confirmed=confirmed)
+            safety.audit_command_decision(decision, "modules.skills.developer")
+            if not decision.allowed:
+                return f"Command blocked: {decision.reason}"
             
-            # Executing safely (in production restrict this heavily)
             logger.info(f"Executing command: {query}")
             result = subprocess.run(query, shell=True, capture_output=True, text=True, timeout=30)
             

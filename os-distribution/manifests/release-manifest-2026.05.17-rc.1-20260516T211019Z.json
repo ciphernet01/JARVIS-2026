@@ -1,0 +1,131 @@
+{
+  "created_at": "2026-05-16T21:10:19.549130+00:00",
+  "file_count": 23,
+  "files": [
+    {
+      "path": "README.md",
+      "sha256": "45be5470dcf9b1754da5c95cd6a5c5f6c55f30f2f4cf4b08a738017b477e62af",
+      "size": 9800
+    },
+    {
+      "path": "backend/server.py",
+      "sha256": "e7721f1c96dc1b2d40064f8fa21abd2eacc409120dbb12d0d66d6523a8d3b63f",
+      "size": 117240
+    },
+    {
+      "path": "capture_hardware_stress.py",
+      "sha256": "8588e76242a563d04737005c85beeaed79aada7273c615d64bb8a36847276ff1",
+      "size": 1653
+    },
+    {
+      "path": "frontend/package-lock.json",
+      "sha256": "d2773c1b6b28e3f6c98f887c38351872be0d9ffd1ecaac79b5843f08b87d9492",
+      "size": 648647
+    },
+    {
+      "path": "frontend/package.json",
+      "sha256": "5ac1374a023074fb8f69522729ff06f712e7b5e19938324b67a020c6226a9131",
+      "size": 850
+    },
+    {
+      "path": "os-distribution/PATCH_UPDATE_PROCESS.md",
+      "sha256": "4984f0b4820aec71496805f348230788e6e58df38502fdff46eaf828a33578eb",
+      "size": 3120
+    },
+    {
+      "path": "os-distribution/README.md",
+      "sha256": "5a71af0a215a3306e2ad0c8367a4e7f9ac5e2bea8dc91c01fe7ae55be34142db",
+      "size": 5395
+    },
+    {
+      "path": "os-distribution/RELEASE_NOTES.md",
+      "sha256": "ea43609b585bffb74657f07e53f69f27af822d55397f70f0c8e42d0f39e7292f",
+      "size": 2684
+    },
+    {
+      "path": "os-distribution/SUPPORT_WORKFLOW.md",
+      "sha256": "171792e66e7139beb8cc4e6b71e7e684cf86e8fb0da7d0266ddb9488435b6dc0",
+      "size": 3194
+    },
+    {
+      "path": "os-distribution/USER_MANUAL.md",
+      "sha256": "8aaf36dbe98b245c954113e750f2c14bdab0e92e31fc73731304c13d0c83fa15",
+      "size": 3448
+    },
+    {
+      "path": "os-distribution/VERSION.json",
+      "sha256": "8b151a31da8e50df0dbcd260b741166bae64e6349bbc290eb309423f5b58d4dc",
+      "size": 196
+    },
+    {
+      "path": "os-distribution/build-iso.sh",
+      "sha256": "0fd9dbb26478ec533f1e9bc15ec40306f6fbc8e48e93fbd8afc9ee947d153e05",
+      "size": 6821
+    },
+    {
+      "path": "os-distribution/config/jarvis.service",
+      "sha256": "af8e2666e8bbecbe3de2a92ae32f4f727c7312104067b5dd0c2678ed809f1331",
+      "size": 966
+    },
+    {
+      "path": "os-distribution/config/live-build.conf",
+      "sha256": "4e84e9349531d51a100bfc9034e06d2e011dfd17946329fb5ce38cb0b67a6d85",
+      "size": 1469
+    },
+    {
+      "path": "os-distribution/config/packages.list",
+      "sha256": "a3e82483127e19f37a3a172fd34e5ba8256d537bc1a531eed5868fb4947459a8",
+      "size": 1339
+    },
+    {
+      "path": "os-distribution/first-boot-setup.sh",
+      "sha256": "5f2f335def8bebabc189381cc2e55475c84764be885d7a1e041c19495eb8dc39",
+      "size": 4738
+    },
+    {
+      "path": "os-distribution/jarvis-shell",
+      "sha256": "ec2cb2030b6399f940f2ee4703856827540f0b41046df0e3f870347d59144715",
+      "size": 5983
+    },
+    {
+      "path": "requirements.txt",
+      "sha256": "452149c02e20620b1af626a2a7d60bc64aa3b247d113a233c0e3b3eef6bb2738",
+      "size": 338
+    },
+    {
+      "path": "run_failover_drill.py",
+      "sha256": "75eb0c0bfb980948f68dba1d34e8950362a348d40f14ca6b7cc77a9ab28a117a",
+      "size": 904
+    },
+    {
+      "path": "run_performance_baseline.py",
+      "sha256": "dcf4c689e9f6283dc5e758d1813130336dc387451a7411d9e222b21219dea12a",
+      "size": 1259
+    },
+    {
+      "path": "run_release_evidence.py",
+      "sha256": "64d45498071d37b87abf4ea6c6387e93dc8433652a6f4741bfd6b84475a0ac85",
+      "size": 940
+    },
+    {
+      "path": "run_security_audit.py",
+      "sha256": "cd9859452a500cdcd4b44012c6ee74236b9e8fc489bd3447736b59f3c78ac913",
+      "size": 1154
+    },
+    {
+      "path": "validate_hardware.py",
+      "sha256": "2359f092e91de1e886028e541b26b6b1c34df687d4241c2301ffc6eb61a8b70e",
+      "size": 1278
+    }
+  ],
+  "id": "release-manifest-2026.05.17-rc.1-20260516T211019Z",
+  "notes": "phase 7 manifest smoke test",
+  "version": {
+    "channel": "release-candidate",
+    "codename": "production-handoff",
+    "minimum_evidence_status": "ready_with_warnings",
+    "name": "JARVIS OS",
+    "phase": "7",
+    "version": "2026.05.17-rc.1"
+  }
+}

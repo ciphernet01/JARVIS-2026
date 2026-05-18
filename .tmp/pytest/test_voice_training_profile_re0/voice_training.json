@@ -1,0 +1,21 @@
+{
+  "average_confidence": 0.98,
+  "completed_at": null,
+  "completion_ratio": 0.167,
+  "language": "en-US",
+  "samples": [
+    {
+      "confidence": 0.95,
+      "duration_ms": null,
+      "language": "en-US",
+      "match_score": 0.98,
+      "phrase_id": "phrase_1",
+      "prompt": "Jarvis, open the system dashboard",
+      "recorded_at": "2026-05-16T19:33:49.002169",
+      "transcript": "Jarvis, open the system dashboard"
+    }
+  ],
+  "started_at": "2026-05-16T19:33:49.002169",
+  "status": "in_progress",
+  "updated_at": "2026-05-16T19:33:49.002169"
+}

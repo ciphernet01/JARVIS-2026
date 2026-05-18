@@ -1,0 +1,78 @@
+{
+  "checks": [
+    {
+      "detail": ".env not found; runtime may rely on host defaults.",
+      "key": "env_file",
+      "label": "Environment File",
+      "recommendation": "Create a production .env from documented secrets.",
+      "severity": "low",
+      "status": "warn"
+    },
+    {
+      "detail": "No explicit CORS origin metadata provided.",
+      "key": "cors_policy",
+      "label": "CORS Policy",
+      "recommendation": "Declare allowed production origins.",
+      "severity": "medium",
+      "status": "warn"
+    },
+    {
+      "detail": "No active in-memory session tokens at audit time.",
+      "key": "session_tokens",
+      "label": "Session Tokens",
+      "recommendation": null,
+      "severity": "medium",
+      "status": "pass"
+    },
+    {
+      "detail": "5 safety gate(s) active.",
+      "key": "safety_gates",
+      "label": "Safety Gates",
+      "recommendation": null,
+      "severity": "high",
+      "status": "pass"
+    },
+    {
+      "detail": "No local audit artifact found yet.",
+      "key": "audit_logging",
+      "label": "Audit Logging",
+      "recommendation": "Trigger one audited action before release validation.",
+      "severity": "medium",
+      "status": "warn"
+    },
+    {
+      "detail": "Missing lockfile(s): frontend\\package-lock.json.",
+      "key": "dependency_lockfiles",
+      "label": "Dependency Lockfiles",
+      "recommendation": "Commit lockfiles for reproducible builds.",
+      "severity": "medium",
+      "status": "warn"
+    },
+    {
+      "detail": "Runtime artifact directorie(s) present: test_reports.",
+      "key": "runtime_artifacts",
+      "label": "Runtime Artifacts",
+      "recommendation": "Clean or exclude runtime artifacts from production images.",
+      "severity": "low",
+      "status": "warn"
+    },
+    {
+      "detail": "No insecure sensitive file permissions detected.",
+      "key": "file_permissions",
+      "label": "Sensitive File Permissions",
+      "recommendation": null,
+      "severity": "medium",
+      "status": "pass"
+    }
+  ],
+  "duration_ms": 0,
+  "generated_at": "2026-05-16T19:33:48.694129+00:00",
+  "id": "security-audit-20260516T193348Z",
+  "overall_status": "warn",
+  "score": 0.69,
+  "summary": {
+    "fail": 0,
+    "pass": 3,
+    "warn": 5
+  }
+}

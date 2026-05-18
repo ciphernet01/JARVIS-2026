@@ -11,6 +11,7 @@ from modules.tools.shell import run_shell
 from modules.tools.files import write_file, read_file, list_directory
 from modules.tools.code_runner import run_python, run_node
 from modules.tools.web import search_web, fetch_url
+from modules.services.safety_manager import SafetyManager
 
 
 class TestShellTool:
@@ -34,6 +35,32 @@ class TestShellTool:
         result = run_shell("cmd", timeout=5)
         assert result["success"] is False
         assert "crash" in result["error"]
+
+    @patch("modules.tools.shell.subprocess.run")
+    def test_run_shell_blocks_destructive_commands(self, mock_run, tmp_path):
+        SafetyManager._instance = None
+        SafetyManager._initialized = False
+        safety = SafetyManager(workspace_root=str(tmp_path))
+
+        result = run_shell("rm -rf important", timeout=5, confirmed=True, safety_state=safety.state())
+
+        assert result["success"] is False
+        assert result["returncode"] == -2
+        assert result["safety"]["category"] == "destructive"
+        mock_run.assert_not_called()
+
+    @patch("modules.tools.shell.subprocess.run")
+    def test_run_shell_requires_confirmation_for_mutating_commands(self, mock_run, tmp_path):
+        SafetyManager._instance = None
+        SafetyManager._initialized = False
+        safety = SafetyManager(workspace_root=str(tmp_path))
+
+        result = run_shell("npm install", timeout=5, safety_state=safety.state())
+
+        assert result["success"] is False
+        assert result["safety"]["category"] == "mutating"
+        assert result["safety"]["requires_confirmation"] is True
+        mock_run.assert_not_called()
 
 
 class TestFileTools:

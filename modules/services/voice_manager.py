@@ -85,6 +85,16 @@ class VoiceState:
     average_confidence: float
 
 
+TRAINING_PROMPTS = [
+    "Jarvis, open the system dashboard",
+    "Jarvis, show my recovery checkpoints",
+    "Jarvis, lower the volume to twenty percent",
+    "Jarvis, scan available networks",
+    "Jarvis, start safe mode",
+    "Jarvis, what is the hardware status",
+]
+
+
 class VoiceManager:
     """
     Central voice processing system for JARVIS OS.
@@ -114,6 +124,11 @@ class VoiceManager:
         self._confidence_scores = []
         self._command_callbacks: List[Callable] = []
         self._lock = threading.Lock()
+        self._training_path = (
+            Path(os.environ.get("JARVIS_VOICE_TRAINING_PATH"))
+            if os.environ.get("JARVIS_VOICE_TRAINING_PATH")
+            else Path(__file__).resolve().parents[2] / "memory" / "voice" / "training_profile.json"
+        )
 
         self._initialize_engines()
         VoiceManager._initialized = True
@@ -411,3 +426,120 @@ class VoiceManager:
             "wake_word_capable": True,
             "supported_languages": ["en-US", "es-ES", "fr-FR", "de-DE"],
         }
+
+    def _default_training_profile(self) -> dict:
+        return {
+            "status": "not_started",
+            "language": "en-US",
+            "started_at": None,
+            "updated_at": None,
+            "completed_at": None,
+            "average_confidence": 0.0,
+            "completion_ratio": 0.0,
+            "samples": [],
+        }
+
+    def _load_training_profile(self) -> dict:
+        try:
+            if self._training_path.exists():
+                with self._training_path.open("r", encoding="utf-8") as handle:
+                    loaded = json.load(handle)
+                    return {**self._default_training_profile(), **loaded}
+        except Exception as exc:
+            logger.warning(f"Failed to load voice training profile: {exc}")
+        return self._default_training_profile()
+
+    def _save_training_profile(self, profile: dict) -> dict:
+        self._training_path.parent.mkdir(parents=True, exist_ok=True)
+        with self._training_path.open("w", encoding="utf-8") as handle:
+            json.dump(profile, handle, indent=2, sort_keys=True)
+        return profile
+
+    def _score_phrase(self, prompt: str, transcript: str, confidence: float) -> float:
+        expected = {token for token in re_tokenize(prompt) if token}
+        actual = {token for token in re_tokenize(transcript) if token}
+        overlap = len(expected & actual) / max(len(expected), 1)
+        return round(max(0.0, min(1.0, (overlap * 0.6) + (confidence * 0.4))), 3)
+
+    def training_plan(self) -> dict:
+        """Return voice training prompts and current profile progress."""
+        with self._lock:
+            profile = self._load_training_profile()
+
+        completed_ids = {sample.get("phrase_id") for sample in profile.get("samples", [])}
+        prompts = [
+            {
+                "id": f"phrase_{index + 1}",
+                "text": text,
+                "completed": f"phrase_{index + 1}" in completed_ids,
+            }
+            for index, text in enumerate(TRAINING_PROMPTS)
+        ]
+        return {
+            "status": "success",
+            "profile": profile,
+            "prompts": prompts,
+            "minimum_completion_ratio": 0.75,
+            "minimum_confidence": 0.6,
+        }
+
+    def record_training_phrase(
+        self,
+        phrase_id: str,
+        prompt: str,
+        transcript: str,
+        confidence: float,
+        language: str = "en-US",
+        duration_ms: Optional[int] = None,
+    ) -> dict:
+        """Persist a voice-training sample and recompute readiness."""
+        now = datetime.utcnow().isoformat()
+        confidence = max(0.0, min(1.0, float(confidence)))
+        sample = {
+            "phrase_id": phrase_id,
+            "prompt": prompt,
+            "transcript": transcript.strip(),
+            "confidence": confidence,
+            "match_score": self._score_phrase(prompt, transcript, confidence),
+            "language": language,
+            "duration_ms": duration_ms,
+            "recorded_at": now,
+        }
+
+        with self._lock:
+            profile = self._load_training_profile()
+            samples = [item for item in profile.get("samples", []) if item.get("phrase_id") != phrase_id]
+            samples.append(sample)
+            samples.sort(key=lambda item: item.get("phrase_id", ""))
+            average = sum(item.get("match_score", 0.0) for item in samples) / max(len(samples), 1)
+            completion_ratio = min(1.0, len({item.get("phrase_id") for item in samples}) / len(TRAINING_PROMPTS))
+            ready = completion_ratio >= 0.75 and average >= 0.6
+            profile.update({
+                "status": "ready" if ready else "in_progress",
+                "language": language,
+                "started_at": profile.get("started_at") or now,
+                "updated_at": now,
+                "completed_at": now if ready else None,
+                "average_confidence": round(average, 3),
+                "completion_ratio": round(completion_ratio, 3),
+                "samples": samples,
+            })
+            self._save_training_profile(profile)
+
+        return self.training_plan()
+
+    def reset_training(self) -> dict:
+        """Reset persisted voice training state."""
+        with self._lock:
+            profile = self._save_training_profile(self._default_training_profile())
+        return {
+            "status": "success",
+            "profile": profile,
+            "prompts": self.training_plan()["prompts"],
+        }
+
+
+def re_tokenize(value: str) -> List[str]:
+    """Normalize a voice phrase into comparable tokens without regex globals."""
+    cleaned = "".join(char.lower() if char.isalnum() else " " for char in value)
+    return cleaned.split()

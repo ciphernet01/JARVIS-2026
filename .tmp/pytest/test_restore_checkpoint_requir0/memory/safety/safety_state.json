@@ -1,0 +1,10 @@
+{
+  "active_reasons": [],
+  "last_checkpoint_at": "2026-05-16T19:33:51.226361+00:00",
+  "last_restore_at": "2026-05-16T19:33:51.230163+00:00",
+  "last_restore_checkpoint": "20260516T193351Z-cf10a4c0",
+  "permission_escalation_required": true,
+  "recovery_mode": false,
+  "safe_mode": false,
+  "updated_at": "2026-05-16T19:33:51.230177+00:00"
+}

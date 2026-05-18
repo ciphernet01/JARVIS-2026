@@ -6,7 +6,9 @@ import logging
 import os
 import subprocess
 from pathlib import Path
-from typing import Dict
+from typing import Dict, Optional
+
+from modules.services.safety_manager import SafetyGate, SafetyManager, SafetyState
 
 logger = logging.getLogger(__name__)
 
@@ -31,9 +33,27 @@ def _sanitize_path(path: str) -> str:
     raise PermissionError(f"Path {path} is outside allowed workspace")
 
 
-def run_shell(command: str, timeout: int = 30) -> Dict[str, object]:
+def run_shell(command: str, timeout: int = 30, *, confirmed: bool = False, safety_state: Optional[SafetyState] = None) -> Dict[str, object]:
     """Run a shell command. Returns stdout, stderr, returncode."""
     logger.info(f"Tool run_shell: {command[:200]}")
+    safety = SafetyManager(workspace_root=os.getenv("JARVIS_WORKSPACE", os.getcwd()))
+    if safety_state is not None:
+        decision = SafetyGate(safety_state).evaluate(command, confirmed=confirmed)
+    else:
+        decision = safety.evaluate_shell_command(command, confirmed=confirmed)
+    safety.audit_command_decision(decision, "modules.tools.shell")
+    if not decision.allowed:
+        return {
+            "success": False,
+            "output": "",
+            "error": decision.reason,
+            "returncode": -2,
+            "safety": {
+                "category": decision.category,
+                "requires_confirmation": decision.requires_confirmation,
+                "blocked": True,
+            },
+        }
     try:
         result = subprocess.run(
             command,
@@ -47,6 +67,11 @@ def run_shell(command: str, timeout: int = 30) -> Dict[str, object]:
             "output": result.stdout,
             "error": result.stderr if result.returncode != 0 else None,
             "returncode": result.returncode,
+            "safety": {
+                "category": decision.category,
+                "requires_confirmation": decision.requires_confirmation,
+                "blocked": False,
+            },
         }
     except subprocess.TimeoutExpired:
         logger.warning(f"Shell command timed out after {timeout}s: {command[:200]}")

@@ -93,6 +93,46 @@ class TestVoiceManager:
         assert "wake_word_capable" in capabilities
         assert "supported_languages" in capabilities
         assert isinstance(capabilities["supported_languages"], list)
+
+    def test_voice_training_profile_records_progress(self, tmp_path, monkeypatch):
+        """Voice training samples should persist and update readiness progress."""
+        training_path = tmp_path / "voice_training.json"
+        monkeypatch.setenv("JARVIS_VOICE_TRAINING_PATH", str(training_path))
+        VoiceManager._initialized = False
+        VoiceManager._instance = None
+        manager = VoiceManager()
+
+        plan = manager.training_plan()
+        assert plan["profile"]["status"] == "not_started"
+        assert len(plan["prompts"]) >= 4
+
+        first_prompt = plan["prompts"][0]
+        updated = manager.record_training_phrase(
+            phrase_id=first_prompt["id"],
+            prompt=first_prompt["text"],
+            transcript=first_prompt["text"],
+            confidence=0.95,
+        )
+
+        assert training_path.exists()
+        assert updated["profile"]["status"] == "in_progress"
+        assert updated["profile"]["completion_ratio"] > 0
+        assert updated["profile"]["average_confidence"] >= 0.9
+
+    def test_voice_training_reset(self, tmp_path, monkeypatch):
+        """Voice training reset should clear persisted samples."""
+        training_path = tmp_path / "voice_training.json"
+        monkeypatch.setenv("JARVIS_VOICE_TRAINING_PATH", str(training_path))
+        VoiceManager._initialized = False
+        VoiceManager._instance = None
+        manager = VoiceManager()
+        prompt = manager.training_plan()["prompts"][0]
+        manager.record_training_phrase(prompt["id"], prompt["text"], prompt["text"], 0.9)
+
+        reset = manager.reset_training()
+
+        assert reset["profile"]["samples"] == []
+        assert reset["profile"]["status"] == "not_started"
     
     def test_wake_word_enable_disable(self):
         """Wake word should be enable/disable."""

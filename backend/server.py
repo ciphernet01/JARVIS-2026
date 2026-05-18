@@ -5,6 +5,7 @@ Advanced AI Assistant with Gemini integration
 
 import os
 import sys
+import asyncio
 import logging
 import platform
 import uuid
@@ -22,7 +23,7 @@ from typing import Any, Dict, List, Optional
 # Ensure core module is importable
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from fastapi import FastAPI, HTTPException, Request, Depends
+from fastapi import FastAPI, HTTPException, Request, Depends, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from dotenv import load_dotenv
@@ -34,7 +35,7 @@ load_dotenv()
 # Import new JARVIS core
 from core import ConfigManager, Assistant
 from modules.skills import SkillFactory
-from modules.services import DeviceManager, ServiceManager, AudioManager, CameraManager, PowerManager, NetworkManager, VoiceManager
+from modules.services import DeviceManager, ServiceManager, AudioManager, CameraManager, PowerManager, NetworkManager, VoiceManager, SafetyManager, PackageManager, HardwareValidationManager, HardwareStressManager, OSPreferencesManager, SecurityAuditManager, PerformanceBaselineManager, FailoverDrillManager, ReleaseEvidenceManager
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
@@ -52,6 +53,12 @@ db = client[DB_NAME]
 EMERGENT_LLM_KEY = os.environ.get("EMERGENT_LLM_KEY")
 OLLAMA_BASE_URL = os.environ.get("OLLAMA_BASE_URL", "http://localhost:11434")
 OLLAMA_MODEL = os.environ.get("OLLAMA_MODEL", "gemma4:latest")
+DEFAULT_CORS_ORIGINS = "http://localhost:3000,http://127.0.0.1:3000,http://localhost:8001,http://127.0.0.1:8001"
+CORS_ORIGINS = [
+    origin.strip()
+    for origin in os.environ.get("JARVIS_CORS_ORIGINS", DEFAULT_CORS_ORIGINS).split(",")
+    if origin.strip()
+]
 
 # Session management
 SESSION_TOKENS = {}
@@ -67,11 +74,90 @@ app = FastAPI(title="JARVIS Neural Interface API", version="2.0")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=CORS_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+def _runtime_metrics() -> Dict[str, Any]:
+    """Return lightweight process and host metrics for health monitoring."""
+    process = psutil.Process(os.getpid())
+    memory = process.memory_info()
+    cpu_percent = psutil.cpu_percent(interval=None)
+
+    return {
+        "status": "ok",
+        "service": "jarvis-backend",
+        "version": app.version,
+        "uptime_seconds": int((datetime.now(timezone.utc) - APP_START_TIME).total_seconds()),
+        "process": {
+            "pid": process.pid,
+            "threads": process.num_threads(),
+            "rss_mb": round(memory.rss / (1024**2), 2),
+            "vms_mb": round(memory.vms / (1024**2), 2),
+            "cpu_percent": round(cpu_percent, 2),
+        },
+        "system": {
+            "cpu_percent": round(psutil.cpu_percent(interval=None), 2),
+            "memory_percent": round(psutil.virtual_memory().percent, 2),
+            "disk_percent": round(psutil.disk_usage(str(WORKSPACE_ROOT)).percent, 2),
+        },
+    }
+
+
+async def _readiness_checks() -> Dict[str, Any]:
+    """Run a small set of readiness checks for deployment targets."""
+    checks: Dict[str, Dict[str, Any]] = {}
+
+    try:
+        assistant = _get_assistant()
+        checks["assistant"] = {"ready": assistant is not None, "detail": "assistant initialized"}
+    except Exception as exc:
+        checks["assistant"] = {"ready": False, "detail": str(exc)}
+
+    try:
+        _get_voice_router()
+        checks["voice_router"] = {"ready": True, "detail": "voice router initialized"}
+    except Exception as exc:
+        checks["voice_router"] = {"ready": False, "detail": str(exc)}
+
+    try:
+        await asyncio.wait_for(db.command("ping"), timeout=1.5)
+        checks["database"] = {"ready": True, "detail": "mongodb reachable"}
+    except Exception as exc:
+        checks["database"] = {"ready": False, "detail": str(exc)}
+
+    ready = all(item["ready"] for item in checks.values())
+    payload = {
+        "status": "ready" if ready else "degraded",
+        "ready": ready,
+        "checks": checks,
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+    }
+    return payload
+
+
+@app.get("/health")
+async def health():
+    """Public liveness check for container and process supervision."""
+    return {"status": "ok", "service": "jarvis-backend", "timestamp": datetime.now(timezone.utc).isoformat()}
+
+
+@app.get("/ready")
+async def ready():
+    """Public readiness check for deployment and orchestration."""
+    payload = await _readiness_checks()
+    if not payload["ready"]:
+        raise HTTPException(status_code=503, detail=payload)
+    return payload
+
+
+@app.get("/metrics")
+async def metrics():
+    """Public deployment metrics for monitoring systems."""
+    return _runtime_metrics()
 
 
 @app.on_event("startup")
@@ -84,6 +170,22 @@ async def startup_event():
     except Exception as exc:
         logger.warning(f"Startup warmup failed: {exc}")
 
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    """Release runtime resources on shutdown."""
+    try:
+        client.close()
+    except Exception as exc:
+        logger.warning(f"Database shutdown cleanup failed: {exc}")
+
+    try:
+        assistant = _jarvis_assistant
+        if assistant and hasattr(assistant, "close"):
+            assistant.close()
+    except Exception as exc:
+        logger.warning(f"Assistant shutdown cleanup failed: {exc}")
+
 # ── Initialize JARVIS Core (ReActAgent + LLMRouter) ─────────────────────────
 _jarvis_assistant: Optional[Assistant] = None
 _service_manager: Optional[ServiceManager] = None
@@ -92,6 +194,15 @@ _audio_manager: Optional[AudioManager] = None
 _camera_manager: Optional[CameraManager] = None
 _power_manager: Optional[PowerManager] = None
 _network_manager: Optional[NetworkManager] = None
+_safety_manager: Optional[SafetyManager] = None
+_package_manager: Optional[PackageManager] = None
+_hardware_validation_manager: Optional[HardwareValidationManager] = None
+_hardware_stress_manager: Optional[HardwareStressManager] = None
+_preferences_manager: Optional[OSPreferencesManager] = None
+_security_audit_manager: Optional[SecurityAuditManager] = None
+_performance_baseline_manager: Optional[PerformanceBaselineManager] = None
+_failover_drill_manager: Optional[FailoverDrillManager] = None
+_release_evidence_manager: Optional[ReleaseEvidenceManager] = None
 _voice_router = None
 
 
@@ -100,6 +211,80 @@ def _get_network_manager() -> NetworkManager:
     if _network_manager is None:
         _network_manager = NetworkManager()
     return _network_manager
+
+
+def _get_safety_manager() -> SafetyManager:
+    global _safety_manager
+    if _safety_manager is None:
+        _safety_manager = SafetyManager(workspace_root=str(WORKSPACE_ROOT))
+    return _safety_manager
+
+
+def _get_package_manager() -> PackageManager:
+    global _package_manager
+    if _package_manager is None:
+        _package_manager = PackageManager()
+    return _package_manager
+
+
+def _get_hardware_validation_manager() -> HardwareValidationManager:
+    global _hardware_validation_manager
+    if _hardware_validation_manager is None:
+        _hardware_validation_manager = HardwareValidationManager(workspace_root=str(WORKSPACE_ROOT))
+    return _hardware_validation_manager
+
+
+def _get_hardware_stress_manager() -> HardwareStressManager:
+    global _hardware_stress_manager
+    if _hardware_stress_manager is None:
+        _hardware_stress_manager = HardwareStressManager(workspace_root=str(WORKSPACE_ROOT))
+    return _hardware_stress_manager
+
+
+def _get_preferences_manager() -> OSPreferencesManager:
+    global _preferences_manager
+    if _preferences_manager is None:
+        _preferences_manager = OSPreferencesManager(workspace_root=str(WORKSPACE_ROOT))
+    return _preferences_manager
+
+
+def _get_security_audit_manager() -> SecurityAuditManager:
+    global _security_audit_manager
+    if _security_audit_manager is None:
+        _security_audit_manager = SecurityAuditManager(workspace_root=str(WORKSPACE_ROOT))
+    return _security_audit_manager
+
+
+def _get_performance_baseline_manager() -> PerformanceBaselineManager:
+    global _performance_baseline_manager
+    if _performance_baseline_manager is None:
+        _performance_baseline_manager = PerformanceBaselineManager(workspace_root=str(WORKSPACE_ROOT))
+    return _performance_baseline_manager
+
+
+def _get_failover_drill_manager() -> FailoverDrillManager:
+    global _failover_drill_manager
+    if _failover_drill_manager is None:
+        _failover_drill_manager = FailoverDrillManager(
+            workspace_root=str(WORKSPACE_ROOT),
+            safety_manager=_get_safety_manager(),
+            service_manager=_get_service_manager(),
+        )
+    return _failover_drill_manager
+
+
+def _get_release_evidence_manager() -> ReleaseEvidenceManager:
+    global _release_evidence_manager
+    if _release_evidence_manager is None:
+        _release_evidence_manager = ReleaseEvidenceManager(
+            workspace_root=str(WORKSPACE_ROOT),
+            security_manager=_get_security_audit_manager(),
+            performance_manager=_get_performance_baseline_manager(),
+            failover_manager=_get_failover_drill_manager(),
+            hardware_validation_manager=_get_hardware_validation_manager(),
+            hardware_stress_manager=_get_hardware_stress_manager(),
+        )
+    return _release_evidence_manager
 
 
 def _get_assistant() -> Optional[Assistant]:
@@ -209,6 +394,102 @@ class VSCodeRequest(BaseModel):
     prompt: Optional[str] = None
 
 
+class SafetyModeRequest(BaseModel):
+    enabled: bool
+    reason: Optional[str] = None
+
+
+class SafetyCheckpointRequest(BaseModel):
+    label: Optional[str] = None
+    notes: Optional[str] = ""
+
+
+class SafetyRestoreRequest(BaseModel):
+    checkpoint_id: str
+    dry_run: bool = True
+    confirmed: bool = False
+
+
+class MaintenanceCommandRequest(BaseModel):
+    command: str
+    timeout_seconds: int = 20
+
+
+class PackageSearchRequest(BaseModel):
+    query: str
+
+
+class PackageActionRequest(BaseModel):
+    action: str
+    package: Optional[str] = None
+    dry_run: bool = True
+    confirmed: bool = False
+
+
+class AppLaunchRequest(BaseModel):
+    app: str
+    dry_run: bool = True
+    confirmed: bool = False
+
+
+class ServiceActionRequest(BaseModel):
+    action: str
+    name: str
+    command: Optional[str] = None
+    directory: Optional[str] = None
+    port: Optional[int] = None
+    dry_run: bool = True
+    confirmed: bool = False
+
+
+class HardwareValidationRequest(BaseModel):
+    label: Optional[str] = None
+    notes: Optional[str] = ""
+    save: bool = True
+
+
+class HardwareStressRequest(BaseModel):
+    label: Optional[str] = None
+    notes: Optional[str] = ""
+    duration_seconds: float = 30.0
+    interval_seconds: float = 2.0
+    save: bool = True
+
+
+class SecurityAuditRequest(BaseModel):
+    save: bool = True
+
+
+class PerformanceBaselineRequest(BaseModel):
+    label: Optional[str] = None
+    notes: Optional[str] = ""
+    duration_seconds: float = 30.0
+    interval_seconds: float = 2.0
+    save: bool = True
+
+
+class FailoverDrillRequest(BaseModel):
+    label: Optional[str] = None
+    notes: Optional[str] = ""
+    save: bool = True
+
+
+class ReleaseEvidenceRequest(BaseModel):
+    label: Optional[str] = None
+    notes: Optional[str] = ""
+    save: bool = True
+
+
+class PreferencesUpdateRequest(BaseModel):
+    language: Optional[str] = None
+    tts_voice: Optional[str] = None
+    high_contrast: Optional[bool] = None
+    reduced_motion: Optional[bool] = None
+    large_text: Optional[bool] = None
+    scanlines: Optional[bool] = None
+    telemetry_refresh_seconds: Optional[int] = None
+
+
 # ── Auth ─────────────────────────────────────────────────────────────────────
 def verify_token(request: Request):
     token = request.headers.get("X-JARVIS-TOKEN")
@@ -272,6 +553,204 @@ def _system_snapshot() -> Dict[str, Any]:
     }
 
 
+def _audit_action(user: Optional[Dict[str, Any]], action: str, details: Optional[Dict[str, Any]] = None, success: bool = True) -> None:
+    assistant = _get_assistant()
+    audit_logger = getattr(assistant, "persistence", {}).get("audit_logger") if assistant else None
+    if audit_logger:
+        audit_logger.log_action(
+            user_id=(user or {}).get("user_id"),
+            action=action,
+            details=details or {},
+            success=success,
+        )
+
+
+def _safety_state_payload() -> Dict[str, Any]:
+    manager = _get_safety_manager()
+    state = manager.state()
+    return {
+        "status": "success",
+        "state": {
+            "safe_mode": state.safe_mode,
+            "recovery_mode": state.recovery_mode,
+            "maintenance_shell_available": state.maintenance_shell_available,
+            "fallback_desktop_available": state.fallback_desktop_available,
+            "backup_available": state.backup_available,
+            "last_checkpoint_at": state.last_checkpoint_at,
+            "checkpoint_count": state.checkpoint_count,
+            "permission_escalation_required": state.permission_escalation_required,
+            "safety_gates": state.safety_gates,
+            "active_reasons": state.active_reasons,
+            "platform": state.platform_name,
+            "maintenance_allowlist": manager.maintenance_allowlist(),
+        },
+        "capabilities": manager.capability_matrix(),
+    }
+
+
+def _readiness_item(
+    key: str,
+    label: str,
+    status: str,
+    detail: str,
+    action: Optional[str] = None,
+) -> Dict[str, Any]:
+    return {
+        "key": key,
+        "label": label,
+        "status": status,
+        "detail": detail,
+        "action": action,
+    }
+
+
+def _os_readiness_payload() -> Dict[str, Any]:
+    items: List[Dict[str, Any]] = []
+
+    health = _system_snapshot()
+    memory_ok = (health.get("memory_available_gb") or 0) >= 2
+    disk_ok = (health.get("disk_free_gb") or 0) >= 10
+    items.append(_readiness_item(
+        "system_resources",
+        "System Resources",
+        "pass" if memory_ok and disk_ok else "warn",
+        f"{health.get('memory_available_gb')} GB RAM free / {health.get('disk_free_gb')} GB disk free",
+        "Close background apps or free storage" if not (memory_ok and disk_ok) else None,
+    ))
+
+    safety_state = _get_safety_manager().state()
+    items.append(_readiness_item(
+        "recovery_safety",
+        "Recovery & Safety",
+        "pass" if safety_state.checkpoint_count > 0 else "warn",
+        f"{safety_state.checkpoint_count} recovery checkpoint(s), {len(safety_state.safety_gates)} gates active",
+        "Create a recovery checkpoint" if safety_state.checkpoint_count == 0 else None,
+    ))
+
+    package_state = _get_package_manager().provider_state()
+    items.append(_readiness_item(
+        "package_lifecycle",
+        "Package Lifecycle",
+        "pass" if package_state.get("available") else "warn",
+        package_state.get("message", "Package provider status unknown"),
+        "Install winget/choco/brew/apt provider" if not package_state.get("available") else None,
+    ))
+
+    voice_caps = _get_voice_manager().capability_matrix()
+    voice_ok = bool(voice_caps.get("stt_available") or voice_caps.get("tts_available"))
+    voice_training = _get_voice_manager().training_plan().get("profile", {})
+    voice_trained = voice_training.get("status") == "ready"
+    items.append(_readiness_item(
+        "voice_stack",
+        "Voice Stack",
+        "pass" if voice_ok and voice_trained else "warn",
+        (
+            f"STT {'ready' if voice_caps.get('stt_available') else 'limited'} / "
+            f"TTS {'ready' if voice_caps.get('tts_available') else 'limited'} / "
+            f"training {voice_training.get('status', 'not_started')}"
+        ),
+        "Complete voice training" if voice_ok and not voice_trained else "Install/configure voice dependencies" if not voice_ok else None,
+    ))
+
+    device_snapshot = _get_device_manager().snapshot()
+    camera_available = bool(device_snapshot.get("camera", {}).get("available"))
+    microphone_available = bool(device_snapshot.get("microphone", {}).get("available"))
+    items.append(_readiness_item(
+        "device_matrix",
+        "Device Matrix",
+        "pass" if camera_available and microphone_available else "warn",
+        f"Camera {'ready' if camera_available else 'unavailable'} / Mic {'ready' if microphone_available else 'unavailable'}",
+        "Check camera/microphone permissions" if not (camera_available and microphone_available) else None,
+    ))
+
+    hardware_reports = _get_hardware_validation_manager().list_reports(limit=1)
+    items.append(_readiness_item(
+        "hardware_validation",
+        "Hardware Validation",
+        "pass" if hardware_reports else "warn",
+        "Latest hardware validation report found" if hardware_reports else "No hardware validation report captured yet",
+        "Run hardware validation from Settings" if not hardware_reports else None,
+    ))
+
+    service_state = _get_service_manager().get_status_snapshot()
+    items.append(_readiness_item(
+        "service_lifecycle",
+        "Service Lifecycle",
+        "pass",
+        f"{service_state.get('tracked_services')} tracked service(s), {service_state.get('running_processes')} processes visible",
+    ))
+
+    prefs = _get_preferences_manager().state()
+    items.append(_readiness_item(
+        "accessibility_preferences",
+        "Accessibility & Language",
+        "pass",
+        f"{prefs.language}, contrast {'high' if prefs.high_contrast else 'standard'}, motion {'reduced' if prefs.reduced_motion else 'standard'}",
+    ))
+
+    security_reports = _get_security_audit_manager().list_reports(limit=1)
+    latest_security = security_reports[0] if security_reports else None
+    security_status = latest_security.get("overall_status") if latest_security else "warn"
+    items.append(_readiness_item(
+        "security_audit",
+        "Security Audit",
+        "pass" if security_status == "pass" else "fail" if security_status == "fail" else "warn",
+        f"Latest audit {security_status} / score {latest_security.get('score')}" if latest_security else "No security hardening audit captured yet",
+        "Run security audit" if not latest_security or security_status != "pass" else None,
+    ))
+
+    performance_reports = _get_performance_baseline_manager().list_reports(limit=1)
+    latest_performance = performance_reports[0] if performance_reports else None
+    performance_status = latest_performance.get("overall_status") if latest_performance else "warn"
+    items.append(_readiness_item(
+        "performance_baseline",
+        "Performance Baseline",
+        "pass" if performance_status == "pass" else "fail" if performance_status == "fail" else "warn",
+        (
+            f"Latest baseline {performance_status} / memory growth "
+            f"{latest_performance.get('summary', {}).get('rss_growth_mb')} MB"
+        ) if latest_performance else "No performance baseline captured yet",
+        "Run performance baseline" if not latest_performance or performance_status != "pass" else None,
+    ))
+
+    failover_reports = _get_failover_drill_manager().list_reports(limit=1)
+    latest_failover = failover_reports[0] if failover_reports else None
+    failover_status = latest_failover.get("overall_status") if latest_failover else "warn"
+    items.append(_readiness_item(
+        "failover_drill",
+        "Failover Drill",
+        "pass" if failover_status == "pass" else "fail" if failover_status == "fail" else "warn",
+        f"Latest drill {failover_status} / score {latest_failover.get('score')}" if latest_failover else "No failover drill captured yet",
+        "Run failover drill" if not latest_failover or failover_status != "pass" else None,
+    ))
+
+    evidence_bundles = _get_release_evidence_manager().list_bundles(limit=1)
+    latest_evidence = evidence_bundles[0] if evidence_bundles else None
+    evidence_status = latest_evidence.get("release_status") if latest_evidence else "warn"
+    items.append(_readiness_item(
+        "release_evidence",
+        "Release Evidence",
+        "pass" if evidence_status == "ready" else "fail" if evidence_status == "blocked" else "warn",
+        f"Latest bundle {evidence_status} / score {latest_evidence.get('score')}" if latest_evidence else "No release-candidate evidence bundle captured yet",
+        "Create release evidence bundle" if not latest_evidence or evidence_status != "ready" else None,
+    ))
+
+    status_rank = {"fail": 0, "warn": 1, "pass": 2}
+    score = round(sum(status_rank.get(item["status"], 0) for item in items) / (len(items) * 2), 2)
+    blockers = [item for item in items if item["status"] == "fail"]
+    warnings = [item for item in items if item["status"] == "warn"]
+
+    return {
+        "status": "success",
+        "overall": "blocked" if blockers else "ready_with_warnings" if warnings else "ready",
+        "score": score,
+        "items": items,
+        "warnings": len(warnings),
+        "blockers": len(blockers),
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+    }
+
+
 def _list_workspace(raw_path: Optional[str] = None) -> Dict[str, Any]:
     target = _resolve_workspace_path(raw_path)
     if not target.exists():
@@ -331,6 +810,128 @@ def _open_allowed_app(command: str, dry_run: bool = False) -> Dict[str, Any]:
     if not dry_run:
         subprocess.Popen([resolved], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, shell=False)
     return {"app": app_key, "executable": executable, "launched": not dry_run}
+
+
+def _allowed_apps_payload() -> List[Dict[str, Any]]:
+    apps = []
+    seen = set()
+    for alias, executable in APP_ALLOWLIST.items():
+        canonical = executable.lower()
+        if canonical in seen:
+            continue
+        seen.add(canonical)
+        available = bool(shutil.which(executable)) or executable.endswith(".exe") or executable.endswith(".cmd")
+        apps.append({
+            "id": alias,
+            "label": alias.title(),
+            "executable": executable,
+            "available": available,
+        })
+    return sorted(apps, key=lambda item: item["label"])
+
+
+def _launch_allowed_app(app_name: str, dry_run: bool = True, confirmed: bool = False) -> Dict[str, Any]:
+    app_key = app_name.strip().lower()
+    if app_key not in APP_ALLOWLIST:
+        raise HTTPException(status_code=400, detail="App is not in the operator allowlist")
+    executable = APP_ALLOWLIST[app_key]
+    resolved = shutil.which(executable) or executable
+    requires_confirmation = True
+    if dry_run:
+        return {
+            "success": True,
+            "app": app_key,
+            "executable": executable,
+            "resolved": resolved,
+            "dry_run": True,
+            "requires_confirmation": True,
+            "message": "App launch plan ready.",
+        }
+    if requires_confirmation and not confirmed:
+        return {
+            "success": False,
+            "app": app_key,
+            "executable": executable,
+            "resolved": resolved,
+            "dry_run": dry_run,
+            "requires_confirmation": True,
+            "message": "Confirmation required before launching app.",
+        }
+    subprocess.Popen([resolved], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, shell=False)
+    return {
+        "success": True,
+        "app": app_key,
+        "executable": executable,
+        "resolved": resolved,
+        "dry_run": False,
+        "requires_confirmation": False,
+        "message": f"Launched {app_key}.",
+    }
+
+
+def _service_action_payload(result: Dict[str, Any], action: str, dry_run: bool = False) -> Dict[str, Any]:
+    return {
+        "success": bool(result.get("success")),
+        "action": action,
+        "dry_run": dry_run,
+        "message": result.get("output") if result.get("success") else result.get("error"),
+        "data": result.get("output") if isinstance(result.get("output"), dict) else {},
+        "error": result.get("error"),
+    }
+
+
+def _run_service_action(request: ServiceActionRequest) -> Dict[str, Any]:
+    manager = _get_service_manager()
+    action = request.action.strip().lower()
+    name = _safe_name(request.name, default="jarvis-service")
+    safety = _get_safety_manager().state()
+
+    if action in {"start", "restart"} and (safety.safe_mode or safety.recovery_mode):
+        reason = "Safe mode blocks service start/restart" if safety.safe_mode else "Recovery mode blocks service start/restart"
+        return {"success": False, "action": action, "dry_run": request.dry_run, "message": reason, "data": {}, "error": reason}
+
+    if action == "start":
+        if not request.command:
+            return {"success": False, "action": action, "dry_run": request.dry_run, "message": "Service command is required.", "data": {}, "error": "Service command is required."}
+        directory = str(_resolve_workspace_path(request.directory)) if request.directory else str(WORKSPACE_ROOT)
+        if request.dry_run:
+            return {
+                "success": True,
+                "action": action,
+                "dry_run": True,
+                "message": "Service start plan ready.",
+                "data": {"name": name, "command": request.command, "directory": directory, "port": request.port},
+                "error": None,
+            }
+        if not request.confirmed:
+            return {
+                "success": False,
+                "action": action,
+                "dry_run": request.dry_run,
+                "message": "Confirmation required before starting service.",
+                "data": {"name": name, "command": request.command, "directory": directory, "port": request.port},
+                "error": None,
+            }
+        return _service_action_payload(manager.start(name, request.command, directory, request.port), action, False)
+
+    if action == "stop":
+        if request.dry_run:
+            return {"success": True, "action": action, "dry_run": True, "message": "Service stop plan ready.", "data": {"name": name}, "error": None}
+        if not request.confirmed:
+            return {"success": False, "action": action, "dry_run": False, "message": "Confirmation required before stopping service.", "data": {"name": name}, "error": None}
+        return _service_action_payload(manager.stop(name), action, False)
+
+    if action == "restart":
+        if request.dry_run:
+            return {"success": True, "action": action, "dry_run": True, "message": "Service restart plan ready.", "data": {"name": name}, "error": None}
+        if not request.confirmed:
+            return {"success": False, "action": action, "dry_run": False, "message": "Confirmation required before restarting service.", "data": {"name": name}, "error": None}
+        return _service_action_payload(manager.restart(name), action, False)
+
+    if action == "status":
+        return _service_action_payload(manager.status(name), action, False)
+
+    return {"success": False, "action": action, "dry_run": request.dry_run, "message": f"Unsupported service action: {action}", "data": {}, "error": "Unsupported service action"}
 
 
 def _route_os_command(command: str, dry_run: bool = False) -> Dict[str, Any]:
@@ -1256,8 +1857,238 @@ async def os_status(user=Depends(verify_token)):
             "voice_commands",
             "device_management",
             "service_control",
+            "recovery_safety",
+            "package_lifecycle",
         ],
     }
+
+
+@app.get("/api/os/readiness")
+async def os_readiness(user=Depends(verify_token)):
+    """Return first-run operating system readiness checklist."""
+    return _os_readiness_payload()
+
+
+@app.get("/api/os/preferences")
+async def os_preferences(user=Depends(verify_token)):
+    """Return persisted language, accessibility, and UI preferences."""
+    manager = _get_preferences_manager()
+    return {
+        "status": "success",
+        "preferences": manager.state().__dict__,
+        "capabilities": manager.capabilities(),
+    }
+
+
+@app.post("/api/os/preferences")
+async def os_preferences_update(request: PreferencesUpdateRequest, user=Depends(verify_token)):
+    """Update persisted language, accessibility, and UI preferences."""
+    manager = _get_preferences_manager()
+    changes = request.dict(exclude_unset=True)
+    prefs = manager.update(changes, datetime.now(timezone.utc).isoformat())
+    _audit_action(user, "os_preferences_update", changes, success=True)
+    return {
+        "status": "success",
+        "preferences": prefs.__dict__,
+        "capabilities": manager.capabilities(),
+        "message": "OS preferences updated.",
+    }
+
+
+@app.post("/api/os/preferences/reset")
+async def os_preferences_reset(user=Depends(verify_token)):
+    """Reset language, accessibility, and UI preferences to defaults."""
+    manager = _get_preferences_manager()
+    prefs = manager.reset(datetime.now(timezone.utc).isoformat())
+    _audit_action(user, "os_preferences_reset", {}, success=True)
+    return {
+        "status": "success",
+        "preferences": prefs.__dict__,
+        "capabilities": manager.capabilities(),
+        "message": "OS preferences reset.",
+    }
+
+
+@app.get("/api/os/safety/state")
+async def os_safety_state(user=Depends(verify_token)):
+    """Return recovery, safe-mode, checkpoint, and safety-gate state."""
+    return _safety_state_payload()
+
+
+@app.post("/api/os/safety/safe-mode")
+async def os_safety_safe_mode(request: SafetyModeRequest, user=Depends(verify_token)):
+    """Enable or disable safe mode."""
+    result = _get_safety_manager().set_safe_mode(request.enabled, request.reason)
+    _audit_action(user, "safety_safe_mode", {"enabled": request.enabled, "reason": request.reason}, result.success)
+    return {
+        **_safety_state_payload(),
+        "message": result.message,
+    }
+
+
+@app.post("/api/os/safety/recovery-mode")
+async def os_safety_recovery_mode(request: SafetyModeRequest, user=Depends(verify_token)):
+    """Enable or disable recovery mode."""
+    result = _get_safety_manager().set_recovery_mode(request.enabled, request.reason)
+    _audit_action(user, "safety_recovery_mode", {"enabled": request.enabled, "reason": request.reason}, result.success)
+    return {
+        **_safety_state_payload(),
+        "message": result.message,
+    }
+
+
+@app.post("/api/os/safety/checkpoint")
+async def os_safety_checkpoint(request: SafetyCheckpointRequest, user=Depends(verify_token)):
+    """Create a recovery checkpoint manifest."""
+    result = _get_safety_manager().create_checkpoint(request.label, request.notes or "")
+    _audit_action(user, "safety_checkpoint", {"label": request.label, "checkpoint": result.checkpoint.id if result.checkpoint else None}, result.success)
+    return {
+        **_safety_state_payload(),
+        "message": result.message,
+        "checkpoint": result.checkpoint.__dict__ if result.checkpoint else None,
+    }
+
+
+@app.get("/api/os/safety/checkpoints")
+async def os_safety_checkpoints(limit: int = 10, user=Depends(verify_token)):
+    """List recent recovery checkpoints."""
+    checkpoints = _get_safety_manager().list_checkpoints(limit=max(1, min(limit, 50)))
+    return {
+        "status": "success",
+        "checkpoints": [checkpoint.__dict__ for checkpoint in checkpoints],
+        "count": len(checkpoints),
+    }
+
+
+@app.post("/api/os/safety/restore")
+async def os_safety_restore(request: SafetyRestoreRequest, user=Depends(verify_token)):
+    """Plan or restore files from a recovery checkpoint."""
+    result = _get_safety_manager().restore_checkpoint(
+        request.checkpoint_id,
+        dry_run=request.dry_run,
+        confirmed=request.confirmed,
+    )
+    _audit_action(
+        user,
+        "safety_restore",
+        {
+            "checkpoint_id": request.checkpoint_id,
+            "dry_run": request.dry_run,
+            "confirmed": request.confirmed,
+            "restored": (result.data or {}).get("restored", []),
+        },
+        result.success,
+    )
+    return {
+        **_safety_state_payload(),
+        "success": result.success,
+        "message": result.message,
+        "data": result.data or {},
+    }
+
+
+@app.post("/api/os/safety/maintenance-command")
+async def os_safety_maintenance_command(request: MaintenanceCommandRequest, user=Depends(verify_token)):
+    """Run an allowlisted offline maintenance diagnostic command."""
+    result = _get_safety_manager().run_maintenance_command(request.command, request.timeout_seconds)
+    _audit_action(
+        user,
+        "safety_maintenance_command",
+        {"command": request.command, "blocked": result.blocked, "returncode": result.returncode},
+        result.success,
+    )
+    return {
+        "success": result.success,
+        "command": result.command,
+        "message": result.message,
+        "stdout": result.stdout,
+        "stderr": result.stderr,
+        "returncode": result.returncode,
+        "blocked": result.blocked,
+        "allowlist": _get_safety_manager().maintenance_allowlist(),
+    }
+
+
+@app.get("/api/os/audit/recent")
+async def os_audit_recent(limit: int = 20, user=Depends(verify_token)):
+    """Return recent audit entries for the current user."""
+    assistant = _get_assistant()
+    audit_logger = getattr(assistant, "persistence", {}).get("audit_logger") if assistant else None
+    if not audit_logger:
+        return {"status": "unavailable", "entries": [], "count": 0}
+    entries = audit_logger.get_user_audit_log(user.get("user_id", "shrey_ceo"), limit=max(1, min(limit, 100)))
+    return {"status": "success", "entries": entries, "count": len(entries)}
+
+
+def _package_result_payload(result) -> Dict[str, Any]:
+    return {
+        "success": result.success,
+        "action": result.action,
+        "dry_run": result.dry_run,
+        "message": result.message,
+        "plan": {
+            "action": result.plan.action,
+            "package": result.plan.package,
+            "command": result.plan.command,
+            "provider": result.plan.provider,
+            "requires_confirmation": result.plan.requires_confirmation,
+            "blocked": result.plan.blocked,
+            "reason": result.plan.reason,
+        },
+        "stdout": result.stdout,
+        "stderr": result.stderr,
+        "returncode": result.returncode,
+        "timestamp": result.timestamp,
+    }
+
+
+@app.get("/api/os/packages/state")
+async def os_packages_state(user=Depends(verify_token)):
+    """Return package lifecycle provider and safety state."""
+    return {
+        "status": "success",
+        "package_manager": _get_package_manager().provider_state(),
+        "safety": _safety_state_payload().get("state"),
+    }
+
+
+@app.post("/api/os/packages/search")
+async def os_packages_search(request: PackageSearchRequest, user=Depends(verify_token)):
+    """Search packages through the detected package provider."""
+    result = _get_package_manager().search(request.query)
+    return _package_result_payload(result)
+
+
+@app.get("/api/os/packages/installed")
+async def os_packages_installed(user=Depends(verify_token)):
+    """List installed packages through the detected package provider."""
+    result = _get_package_manager().list_installed()
+    return _package_result_payload(result)
+
+
+@app.post("/api/os/packages/action")
+async def os_packages_action(request: PackageActionRequest, user=Depends(verify_token)):
+    """Plan or execute install/uninstall/update through safety gates."""
+    result = _get_package_manager().execute(
+        request.action,
+        request.package,
+        dry_run=request.dry_run,
+        confirmed=request.confirmed,
+        safety_state=_get_safety_manager().state(),
+    )
+    _audit_action(
+        user,
+        f"package_{request.action}",
+        {
+            "package": request.package,
+            "dry_run": request.dry_run,
+            "confirmed": request.confirmed,
+            "provider": result.plan.provider,
+            "blocked": result.plan.blocked,
+        },
+        result.success,
+    )
+    return _package_result_payload(result)
 
 
 @app.get("/api/os/fs/list")
@@ -1279,6 +2110,25 @@ async def os_processes(limit: int = 50, user=Depends(verify_token)):
     return {"processes": processes, "count": len(processes)}
 
 
+@app.get("/api/os/apps")
+async def os_apps(user=Depends(verify_token)):
+    """Return allowlisted launchable applications."""
+    return {"status": "success", "apps": _allowed_apps_payload(), "count": len(APP_ALLOWLIST)}
+
+
+@app.post("/api/os/apps/launch")
+async def os_app_launch(request: AppLaunchRequest, user=Depends(verify_token)):
+    """Plan or launch an allowlisted desktop application."""
+    result = _launch_allowed_app(request.app, request.dry_run, request.confirmed)
+    _audit_action(
+        user,
+        "app_launch",
+        {"app": request.app, "dry_run": request.dry_run, "confirmed": request.confirmed},
+        result.get("success", False),
+    )
+    return result
+
+
 @app.get("/api/os/services")
 async def os_services(user=Depends(verify_token)):
     """Return tracked services."""
@@ -1286,10 +2136,221 @@ async def os_services(user=Depends(verify_token)):
     return {"services": services, "count": len(services)}
 
 
+@app.post("/api/os/services/action")
+async def os_services_action(request: ServiceActionRequest, user=Depends(verify_token)):
+    """Plan or execute tracked service lifecycle actions."""
+    result = _run_service_action(request)
+    _audit_action(
+        user,
+        f"service_{request.action}",
+        {
+            "name": request.name,
+            "directory": request.directory,
+            "port": request.port,
+            "dry_run": request.dry_run,
+            "confirmed": request.confirmed,
+        },
+        result.get("success", False),
+    )
+    return result
+
+
 @app.get("/api/os/devices")
 async def os_devices(user=Depends(verify_token)):
     """Return a high signal hardware snapshot for the OS control layer."""
     return _get_device_manager().snapshot()
+
+
+@app.post("/api/os/hardware/validate")
+async def os_hardware_validate(request: HardwareValidationRequest, user=Depends(verify_token)):
+    """Run Phase 4 hardware validation and persist a compatibility report."""
+    report = _get_hardware_validation_manager().run_validation(
+        label=request.label,
+        notes=request.notes or "",
+        save=request.save,
+    )
+    _audit_action(
+        user,
+        "hardware_validation",
+        {
+            "report_id": report.get("id"),
+            "label": request.label,
+            "overall_status": report.get("overall_status"),
+            "score": report.get("score"),
+            "saved": request.save,
+        },
+        True,
+    )
+    return {"status": "success", "report": report}
+
+
+@app.get("/api/os/hardware/reports")
+async def os_hardware_reports(limit: int = 10, user=Depends(verify_token)):
+    """List saved Phase 4 hardware validation reports."""
+    reports = _get_hardware_validation_manager().list_reports(limit=max(1, min(limit, 50)))
+    return {"status": "success", "reports": reports, "count": len(reports)}
+
+
+@app.get("/api/os/hardware/matrix")
+async def os_hardware_matrix(limit: int = 20, user=Depends(verify_token)):
+    """Return a compatibility matrix across saved target configurations."""
+    matrix = _get_hardware_validation_manager().compatibility_matrix(limit=max(1, min(limit, 100)))
+    return {"status": "success", "matrix": matrix}
+
+
+@app.post("/api/os/hardware/stress-capture")
+async def os_hardware_stress_capture(request: HardwareStressRequest, user=Depends(verify_token)):
+    """Run a short Phase 4 hardware stress/thermal capture."""
+    report = _get_hardware_stress_manager().run_capture(
+        label=request.label,
+        notes=request.notes or "",
+        duration_seconds=request.duration_seconds,
+        interval_seconds=request.interval_seconds,
+        save=request.save,
+    )
+    _audit_action(
+        user,
+        "hardware_stress_capture",
+        {
+            "report_id": report.get("id"),
+            "label": request.label,
+            "duration_seconds": report.get("duration_seconds"),
+            "overall_status": report.get("overall_status"),
+            "saved": request.save,
+        },
+        True,
+    )
+    return {"status": "success", "report": report}
+
+
+@app.get("/api/os/hardware/stress-reports")
+async def os_hardware_stress_reports(limit: int = 10, user=Depends(verify_token)):
+    """List saved Phase 4 hardware stress/thermal reports."""
+    reports = _get_hardware_stress_manager().list_reports(limit=max(1, min(limit, 50)))
+    return {"status": "success", "reports": reports, "count": len(reports)}
+
+
+@app.post("/api/os/security/audit")
+async def os_security_audit(request: SecurityAuditRequest, user=Depends(verify_token)):
+    """Run a Phase 6 security hardening audit."""
+    report = _get_security_audit_manager().run_audit(
+        cors_origins=CORS_ORIGINS,
+        session_tokens=SESSION_TOKENS,
+        safety_state=_get_safety_manager().state(),
+        save=request.save,
+    )
+    _audit_action(
+        user,
+        "security_audit",
+        {
+            "report_id": report.get("id"),
+            "overall_status": report.get("overall_status"),
+            "score": report.get("score"),
+            "saved": request.save,
+        },
+        report.get("overall_status") != "fail",
+    )
+    return {"status": "success", "report": report}
+
+
+@app.get("/api/os/security/audits")
+async def os_security_audits(limit: int = 10, user=Depends(verify_token)):
+    """List saved Phase 6 security hardening audits."""
+    reports = _get_security_audit_manager().list_reports(limit=max(1, min(limit, 50)))
+    return {"status": "success", "reports": reports, "count": len(reports)}
+
+
+@app.post("/api/os/performance/baseline")
+async def os_performance_baseline(request: PerformanceBaselineRequest, user=Depends(verify_token)):
+    """Run a Phase 6 performance baseline and memory drift check."""
+    report = _get_performance_baseline_manager().run_baseline(
+        label=request.label,
+        notes=request.notes or "",
+        duration_seconds=request.duration_seconds,
+        interval_seconds=request.interval_seconds,
+        save=request.save,
+    )
+    _audit_action(
+        user,
+        "performance_baseline",
+        {
+            "report_id": report.get("id"),
+            "label": request.label,
+            "duration_seconds": report.get("duration_seconds"),
+            "overall_status": report.get("overall_status"),
+            "rss_growth_mb": report.get("summary", {}).get("rss_growth_mb"),
+            "saved": request.save,
+        },
+        report.get("overall_status") != "fail",
+    )
+    return {"status": "success", "report": report}
+
+
+@app.get("/api/os/performance/baselines")
+async def os_performance_baselines(limit: int = 10, user=Depends(verify_token)):
+    """List saved Phase 6 performance baseline reports."""
+    reports = _get_performance_baseline_manager().list_reports(limit=max(1, min(limit, 50)))
+    return {"status": "success", "reports": reports, "count": len(reports)}
+
+
+@app.post("/api/os/failover/drill")
+async def os_failover_drill(request: FailoverDrillRequest, user=Depends(verify_token)):
+    """Run a Phase 6 non-mutating failover drill."""
+    report = _get_failover_drill_manager().run_drill(
+        label=request.label,
+        notes=request.notes or "",
+        save=request.save,
+    )
+    _audit_action(
+        user,
+        "failover_drill",
+        {
+            "report_id": report.get("id"),
+            "label": request.label,
+            "overall_status": report.get("overall_status"),
+            "score": report.get("score"),
+            "saved": request.save,
+        },
+        report.get("overall_status") != "fail",
+    )
+    return {"status": "success", "report": report}
+
+
+@app.get("/api/os/failover/drills")
+async def os_failover_drills(limit: int = 10, user=Depends(verify_token)):
+    """List saved Phase 6 failover drill reports."""
+    reports = _get_failover_drill_manager().list_reports(limit=max(1, min(limit, 50)))
+    return {"status": "success", "reports": reports, "count": len(reports)}
+
+
+@app.post("/api/os/release/evidence")
+async def os_release_evidence(request: ReleaseEvidenceRequest, user=Depends(verify_token)):
+    """Create a Phase 6 release-candidate evidence bundle."""
+    bundle = _get_release_evidence_manager().create_bundle(
+        label=request.label,
+        notes=request.notes or "",
+        save=request.save,
+    )
+    _audit_action(
+        user,
+        "release_evidence_bundle",
+        {
+            "bundle_id": bundle.get("id"),
+            "label": request.label,
+            "release_status": bundle.get("release_status"),
+            "score": bundle.get("score"),
+            "saved": request.save,
+        },
+        bundle.get("release_status") != "blocked",
+    )
+    return {"status": "success", "bundle": bundle}
+
+
+@app.get("/api/os/release/evidence")
+async def os_release_evidence_list(limit: int = 10, user=Depends(verify_token)):
+    """List saved Phase 6 release evidence bundles."""
+    bundles = _get_release_evidence_manager().list_bundles(limit=max(1, min(limit, 50)))
+    return {"status": "success", "bundles": bundles, "count": len(bundles)}
 
 
 @app.get("/api/os/audio/snapshot")
@@ -1692,6 +2753,16 @@ class VoiceWakeWordRequest(BaseModel):
     word: Optional[str] = None
 
 
+class VoiceTrainingRecordRequest(BaseModel):
+    """Request model for voice training phrase capture."""
+    phrase_id: str
+    prompt: str
+    transcript: str
+    confidence: float = 0.75
+    language: str = "en-US"
+    duration_ms: Optional[int] = None
+
+
 @app.get("/api/os/voice/state")
 async def os_voice_state(user=Depends(verify_token)):
     """Get current voice system state."""
@@ -1702,22 +2773,25 @@ async def os_voice_state(user=Depends(verify_token)):
         return {
             "status": "success",
             "state": {
-                "mode": state.mode.value,
-                "listening": state.listening,
+                "mode": state.mode,
+                "listening": state.is_listening,
                 "wake_word_enabled": state.wake_word_enabled,
-                "wake_word": state.wake_word,
-                "microphones": state.microphones,
-                "speakers": state.speakers,
+                "wake_word": "jarvis" if state.wake_word_enabled else None,
+                "microphones": 1 if state.microphone_available else 0,
+                "speakers": 1 if state.speaker_available else 0,
+                "microphone_available": state.microphone_available,
+                "speaker_available": state.speaker_available,
+                "commands_processed": state.commands_processed,
                 "average_confidence": round(state.average_confidence, 3),
                 "last_command": {
                     "text": state.last_command.text if state.last_command else None,
                     "confidence": round(state.last_command.confidence, 3) if state.last_command else None,
-                    "timestamp": state.last_command.timestamp if state.last_command else None,
+                    "timestamp": state.last_command.recognized_at if state.last_command else None,
                 } if state.last_command else None,
                 "last_response": {
                     "text": state.last_response.text if state.last_response else None,
                     "status": state.last_response.status if state.last_response else None,
-                    "timestamp": state.last_response.timestamp if state.last_response else None,
+                    "timestamp": state.last_response.generated_at if state.last_response else None,
                 } if state.last_response else None,
             }
         }
@@ -1743,7 +2817,7 @@ async def os_voice_listen(user=Depends(verify_token)):
                     "confidence": round(command.confidence, 3),
                     "language": command.language,
                     "duration_ms": command.duration_ms,
-                    "timestamp": command.timestamp,
+                    "timestamp": command.recognized_at,
                 },
                 "response": response_text,
             }
@@ -1770,7 +2844,7 @@ async def os_voice_speak(request: VoiceSpeakRequest, user=Depends(verify_token))
                 "text": response.text,
                 "duration_ms": response.duration_ms,
                 "status": response.status,
-                "timestamp": response.timestamp,
+                "timestamp": response.generated_at,
             }
         }
     except Exception as e:
@@ -1815,6 +2889,59 @@ async def os_voice_capabilities(user=Depends(verify_token)):
         }
     except Exception as e:
         logger.error(f"Voice capabilities error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/os/voice/training")
+async def os_voice_training(user=Depends(verify_token)):
+    """Return voice training prompts and current profile progress."""
+    try:
+        manager = _get_voice_manager()
+        return manager.training_plan()
+    except Exception as e:
+        logger.error(f"Voice training state error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/os/voice/training/record")
+async def os_voice_training_record(request: VoiceTrainingRecordRequest, user=Depends(verify_token)):
+    """Persist one voice training phrase sample."""
+    try:
+        manager = _get_voice_manager()
+        payload = manager.record_training_phrase(
+            phrase_id=request.phrase_id,
+            prompt=request.prompt,
+            transcript=request.transcript,
+            confidence=request.confidence,
+            language=request.language,
+            duration_ms=request.duration_ms,
+        )
+        _audit_action(
+            user,
+            "voice_training_record",
+            {
+                "phrase_id": request.phrase_id,
+                "confidence": request.confidence,
+                "language": request.language,
+            },
+            success=True,
+        )
+        return payload
+    except Exception as e:
+        logger.error(f"Voice training record error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/os/voice/training/reset")
+async def os_voice_training_reset(user=Depends(verify_token)):
+    """Reset persisted voice training profile."""
+    try:
+        manager = _get_voice_manager()
+        payload = manager.reset_training()
+        _audit_action(user, "voice_training_reset", {}, success=True)
+        return payload
+    except Exception as e:
+        logger.error(f"Voice training reset error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -1949,6 +3076,67 @@ async def clear_voice_history(older_than_hours: int = 24, user=Depends(verify_to
     except Exception as e:
         logger.error(f"Voice history clear error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.websocket("/api/voice/stream")
+async def voice_stream(websocket: WebSocket):
+    """Stream voice analytics data over WebSocket."""
+    token = websocket.query_params.get("token")
+    if not token or token not in SESSION_TOKENS:
+        await websocket.close(code=1008)
+        return
+
+    await websocket.accept()
+    try:
+        while True:
+            router = _get_voice_router()
+            history = router.get_history(8)
+
+            history_data = [
+                {
+                    "command": entry.command_text,
+                    "response": entry.response_text,
+                    "confidence": entry.confidence,
+                    "status": entry.status.value,
+                    "duration_ms": entry.duration_ms,
+                    "timestamp": entry.timestamp.isoformat(),
+                }
+                for entry in history
+            ]
+
+            history_mgr = router.history_manager
+            perf_mgr = router.performance_monitor
+            stats = history_mgr.get_stats()
+            perf_stats = perf_mgr.get_stats("voice_command")
+
+            payload = {
+                "history": history_data,
+                "stats": {
+                    "history_stats": {
+                        "total_entries": stats.get("total_entries", 0),
+                        "success_rate": round(stats.get("success_rate_overall", 0), 3),
+                        "avg_latency_ms": round(stats.get("avg_latency_ms", 0), 2),
+                        "avg_confidence": round(stats.get("avg_confidence", 0), 3),
+                        "execution": stats.get("status_distribution", {}).get("EXECUTED", 0),
+                        "failed": stats.get("status_distribution", {}).get("FAILED", 0),
+                    },
+                    "performance_stats": {
+                        "count": perf_stats.get("count", 0),
+                        "success_rate": round(perf_stats.get("success_rate", 0), 3),
+                        "avg_duration_ms": round(perf_stats.get("avg_duration_ms", 0), 2),
+                        "p95_duration_ms": round(perf_stats.get("p95_duration_ms", 0), 2),
+                    },
+                },
+                "context": router.get_session_summary(),
+            }
+
+            await websocket.send_json(payload)
+            await asyncio.sleep(2)
+    except WebSocketDisconnect:
+        logger.info("Voice analytics stream disconnected")
+    except Exception as exc:
+        logger.warning(f"Voice analytics stream error: {exc}")
+        await websocket.close(code=1011)
 
 
 if __name__ == "__main__":

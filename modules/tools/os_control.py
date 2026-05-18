@@ -8,8 +8,10 @@ from typing import Dict
 
 logger = logging.getLogger(__name__)
 
+pyautogui = None
 try:
-    import pyautogui
+    import pyautogui as _pyautogui
+    pyautogui = _pyautogui
     PYAUTOGUI_AVAILABLE = True
     # Fail-safe to prevent runaway automation
     pyautogui.FAILSAFE = True

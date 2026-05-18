@@ -1,0 +1,35 @@
+{
+  "created_at": "2026-05-16T19:33:51.226361+00:00",
+  "id": "20260516T193351Z-cf10a4c0",
+  "label": "restore-test",
+  "manifest_path": "backups\\recovery\\20260516T193351Z-cf10a4c0.json",
+  "notes": "",
+  "state": {
+    "active_reasons": [],
+    "backup_available": false,
+    "checkpoint_count": 0,
+    "fallback_desktop_available": true,
+    "last_checkpoint_at": null,
+    "maintenance_shell_available": true,
+    "permission_escalation_required": true,
+    "platform_name": "Windows",
+    "recovery_mode": false,
+    "safe_mode": false,
+    "safety_gates": [
+      "confirm_power_actions",
+      "confirm_package_changes",
+      "confirm_service_lifecycle",
+      "workspace_path_boundary",
+      "audit_sensitive_actions"
+    ]
+  },
+  "tracked_files": [
+    {
+      "backup_path": "backups\\recovery\\20260516T193351Z-cf10a4c0\\files\\.env.example",
+      "modified": "2026-05-16T19:33:51.221963+00:00",
+      "path": ".env.example",
+      "size": 14
+    }
+  ],
+  "workspace_root": "C:\\JARVIS-2026\\.tmp\\pytest\\test_restore_checkpoint_requir0"
+}

@@ -1,0 +1,10 @@
+{
+  "active_reasons": [
+    "recovery_mode: unit test"
+  ],
+  "last_checkpoint_at": null,
+  "permission_escalation_required": true,
+  "recovery_mode": true,
+  "safe_mode": false,
+  "updated_at": "2026-05-16T19:33:51.264660+00:00"
+}

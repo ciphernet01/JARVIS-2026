@@ -12,6 +12,7 @@ export default function Terminal({ api, token }) {
   const [listening, setListening] = useState(false);
   const outputRef = useRef(null);
   const recognitionRef = useRef(null);
+  const listeningRef = useRef(false);
 
   useEffect(() => {
     if (outputRef.current) {
@@ -30,12 +31,35 @@ export default function Terminal({ api, token }) {
       recognition.onresult = (event) => {
         const transcript = event.results[0][0].transcript;
         setInput(transcript);
+        listeningRef.current = false;
         setListening(false);
       };
-      recognition.onend = () => setListening(false);
-      recognition.onerror = () => setListening(false);
+      recognition.onend = () => {
+        listeningRef.current = false;
+        setListening(false);
+      };
+      recognition.onerror = (event) => {
+        listeningRef.current = false;
+        setListening(false);
+        setMessages(prev => [...prev, { type: 'error', text: `[VOICE INPUT] ${event.error || 'Recognition failed'}` }]);
+      };
       recognitionRef.current = recognition;
     }
+    return () => {
+      if (recognitionRef.current) {
+        recognitionRef.current.onresult = null;
+        recognitionRef.current.onend = null;
+        recognitionRef.current.onerror = null;
+        try {
+          recognitionRef.current.abort();
+        } catch {
+          // Browser recognition implementations can throw after permission denial.
+        }
+      }
+      if (window.speechSynthesis) {
+        window.speechSynthesis.cancel();
+      }
+    };
   }, []);
 
   const speak = (text) => {
@@ -54,13 +78,38 @@ export default function Terminal({ api, token }) {
   };
 
   const toggleListening = () => {
-    if (!recognitionRef.current) return;
-    if (listening) {
-      recognitionRef.current.stop();
+    if (!recognitionRef.current) {
+      setMessages(prev => [...prev, { type: 'error', text: '[VOICE INPUT] Speech recognition is not available in this browser.' }]);
+      return;
+    }
+    if (listeningRef.current) {
+      try {
+        recognitionRef.current.stop();
+      } catch {
+        recognitionRef.current.abort();
+      }
+      listeningRef.current = false;
       setListening(false);
     } else {
-      recognitionRef.current.start();
-      setListening(true);
+      try {
+        recognitionRef.current.start();
+        listeningRef.current = true;
+        setListening(true);
+      } catch (error) {
+        listeningRef.current = false;
+        setListening(false);
+        setMessages(prev => [...prev, { type: 'error', text: `[VOICE INPUT] ${error.message}` }]);
+      }
+    }
+  };
+
+  const readResponse = async (resp) => {
+    const text = await resp.text();
+    if (!text) return {};
+    try {
+      return JSON.parse(text);
+    } catch {
+      return { response: text };
     }
   };
 
@@ -77,16 +126,19 @@ export default function Terminal({ api, token }) {
         headers: { 'Content-Type': 'application/json', 'X-JARVIS-TOKEN': token },
         body: JSON.stringify({ command: cmd }),
       });
-      const data = await resp.json();
-      if (data.error) {
-        setMessages(prev => [...prev, { type: 'error', text: data.error || data.detail }]);
+      const data = await readResponse(resp);
+      if (!resp.ok || data.error) {
+        const errorMsg = data.error || data.detail || data.message || data.response || 'Critical link failure';
+        setMessages(prev => [...prev, { type: 'error', text: `[SYSTEM ERROR ${resp.status}] ${errorMsg}` }]);
+        speak('System error encountered, Sir.');
       } else {
         const prefix = data.source === 'operator' || data.handled ? '[OPERATOR] ' : '';
         setMessages(prev => [...prev, { type: 'jarvis', text: `${prefix}${data.response}` }]);
         speak(data.response);
       }
     } catch (e) {
-      setMessages(prev => [...prev, { type: 'error', text: `Connection error: ${e.message}` }]);
+      setMessages(prev => [...prev, { type: 'error', text: `[LINK FAILURE] ${e.message}` }]);
+      speak('Neural link lost, Sir.');
     } finally {
       setProcessing(false);
     }

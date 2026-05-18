@@ -1,0 +1,8 @@
+{
+  "name": "JARVIS OS",
+  "version": "2026.05.17-rc.1",
+  "channel": "release-candidate",
+  "phase": "7",
+  "codename": "production-handoff",
+  "minimum_evidence_status": "ready_with_warnings"
+}
