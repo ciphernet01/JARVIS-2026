@@ -72,6 +72,15 @@ xserver-xorg
 xinit
 openbox
 xterm
+calamares
+calamares-settings-debian
+
+# Virtualization & Hardware Drivers
+open-vm-tools-desktop
+xserver-xorg-video-intel
+xserver-xorg-video-amdgpu
+mesa-utils
+libgl1-mesa-dri
 libgtk-3-0
 libnss3
 libxss1

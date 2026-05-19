@@ -34,6 +34,13 @@ except ImportError:
     logger.warning("WhisperRecognizer not available, local STT disabled")
 
 try:
+    from modules.voice.wake_word import WakeWordDetector
+    WAKE_WORD_AVAILABLE = True
+except ImportError:
+    WAKE_WORD_AVAILABLE = False
+    logger.warning("WakeWordDetector not available")
+
+try:
     import pyttsx3
     PYTTSX3_AVAILABLE = True
 except ImportError:
@@ -125,6 +132,7 @@ class VoiceManager:
         self._wake_word_enabled = False
         self._recognizer = None
         self._whisper = None
+        self._wake_detector = None
         self._tts_engine = None
         self._last_command = None
         self._last_response = None
@@ -364,6 +372,13 @@ class VoiceManager:
         except Exception as e:
             logger.warning(f"espeak-ng error: {e}")
 
+    def _on_wake_word(self, word):
+        """Internal callback for wake word detection."""
+        logger.info(f"System triggered by wake word: {word}")
+        # In a real shell, this would trigger the 'Listen' UI state
+        # For now, we just log it and potentially fire specific callbacks
+        self.listen_for_command()
+
     def enable_wake_word(self, wake_word: str = "jarvis"):
         """
         Enable wake word detection.
@@ -372,12 +387,18 @@ class VoiceManager:
             wake_word: Word to listen for (e.g., "jarvis")
         """
         with self._lock:
+            if WAKE_WORD_AVAILABLE and not self._wake_detector:
+                self._wake_detector = WakeWordDetector(wake_word, callback=self._on_wake_word)
+                self._wake_detector.start()
             self._wake_word_enabled = True
         logger.info(f"Wake word detection enabled for: {wake_word}")
 
     def disable_wake_word(self):
         """Disable wake word detection."""
         with self._lock:
+            if self._wake_detector:
+                self._wake_detector.stop()
+                self._wake_detector = None
             self._wake_word_enabled = False
         logger.info("Wake word detection disabled")
 

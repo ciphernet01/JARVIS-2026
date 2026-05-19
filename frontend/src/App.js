@@ -3,6 +3,7 @@ import LoginScreen from './components/LoginScreen';
 import Dashboard from './components/Dashboard';
 import BootSequence from './components/BootSequence';
 import OnboardingScreen from './components/OnboardingScreen';
+import NeuralTutorial from './components/NeuralTutorial';
 
 const API = process.env.REACT_APP_BACKEND_URL || '';
 
@@ -11,6 +12,7 @@ function App() {
   const [token, setToken] = useState(null);
   const [booted, setBooted] = useState(false);
   const [onboardingComplete, setOnboardingComplete] = useState(false);
+  const [tutorialComplete, setTutorialComplete] = useState(false);
   const [initialPanel, setInitialPanel] = useState('control');
   const [preferences, setPreferences] = useState(null);
 
@@ -27,6 +29,7 @@ function App() {
   useEffect(() => {
     const saved = localStorage.getItem('jarvis_token');
     setOnboardingComplete(localStorage.getItem('jarvis_onboarding_complete') === 'true');
+    setTutorialComplete(localStorage.getItem('jarvis_tutorial_complete') === 'true');
     if (saved) {
       setToken(saved);
       setAuthenticated(true);
@@ -92,10 +95,18 @@ function App() {
     );
   }
 
-  return <Dashboard token={token} api={API} onLogout={handleLogout} initialPanel={initialPanel} preferences={preferences} onPreferencesChange={(prefs) => {
-    setPreferences(prefs);
-    applyPreferences(prefs);
-  }} />;
+  return (
+    <>
+      {!tutorialComplete && <NeuralTutorial onComplete={() => {
+        setTutorialComplete(true);
+        localStorage.setItem('jarvis_tutorial_complete', 'true');
+      }} />}
+      <Dashboard token={token} api={API} onLogout={handleLogout} initialPanel={initialPanel} preferences={preferences} onPreferencesChange={(prefs) => {
+        setPreferences(prefs);
+        applyPreferences(prefs);
+      }} />
+    </>
+  );
 }
 
 export default App;

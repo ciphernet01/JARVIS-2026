@@ -1,0 +1,23 @@
+{
+  "version": "2.5.0-production",
+  "codename": "STARK-LINK",
+  "build_date": "2026-05-15",
+  "architecture": "amd64",
+  "kernel": "6.1.0-generic",
+  "features": [
+    "Neural Shell HUD (Electron/React)",
+    "Local AI Stack (Whisper/Ollama/Llama 3.1)",
+    "Always-Listening Wake Word (Hey JARVIS)",
+    "Spatial Computing Bridge (MediaPipe)",
+    "Multi-User Biometric Login (Face ID)",
+    "Neural Macro Architect",
+    "Calamares Branded Installer"
+  ],
+  "drivers": [
+    "open-vm-tools-desktop",
+    "xserver-xorg-video-intel",
+    "xserver-xorg-video-amdgpu",
+    "mesa-dri-accelerated"
+  ],
+  "checksum": "sha256:d8e8fca2dc0f896fd7cb4cb0031ba249"
+}
