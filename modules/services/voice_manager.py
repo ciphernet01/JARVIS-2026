@@ -375,9 +375,10 @@ class VoiceManager:
     def _on_wake_word(self, word):
         """Internal callback for wake word detection."""
         logger.info(f"System triggered by wake word: {word}")
-        # In a real shell, this would trigger the 'Listen' UI state
-        # For now, we just log it and potentially fire specific callbacks
-        self.listen_for_command()
+        # Automatically start listening when wake word is detected
+        command = self.listen_for_command()
+        if command:
+            self.process_command(command)
 
     def enable_wake_word(self, wake_word: str = "jarvis"):
         """
