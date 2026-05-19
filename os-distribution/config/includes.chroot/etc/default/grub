@@ -1,0 +1,6 @@
+GRUB_DEFAULT=0
+GRUB_TIMEOUT=2
+GRUB_DISTRIBUTOR="JARVIS Neural OS"
+GRUB_CMDLINE_LINUX_DEFAULT="quiet splash loglevel=2 intel_pstate=disable"
+GRUB_CMDLINE_LINUX=""
+GRUB_BACKGROUND="/opt/jarvis/static/grub_splash.png"

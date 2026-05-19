@@ -1,0 +1,8 @@
+[Plymouth Theme]
+Name=JARVIS Neural Boot
+Description=Futuristic AI Interface Boot Splash
+ModuleName=script
+
+[script]
+ImageDir=/usr/share/plymouth/themes/jarvis
+ScriptFile=/usr/share/plymouth/themes/jarvis/jarvis.script

@@ -1,12 +1,34 @@
-import React, { useState, useRef, useEffect } from 'react';
-import { Send, Code2, FileCode, Play } from 'lucide-react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
+import { Send, Code2, FileCode, Play, List, Plus, Trash2, CheckCircle2 } from 'lucide-react';
 
 export default function DevWorkspace({ api, token }) {
   const [prompt, setPrompt] = useState('');
   const [language, setLanguage] = useState('python');
   const [response, setResponse] = useState('');
   const [processing, setProcessing] = useState(false);
+
+  const [mode, setActiveMode] = useState('code'); // 'code' or 'macros'
+  const [macros, setMacros] = useState([]);
+  const [macroName, setMacroName] = useState('');
+  const [macroSteps, setMacroSteps] = useState([]);
+  const [newStepValue, setNewStepValue] = useState('');
+  const [newStepType, setNewStepType] = useState('command');
+
   const outputRef = useRef(null);
+
+  const fetchMacros = useCallback(async () => {
+    try {
+      const resp = await fetch(`${api}/api/macros/list`, {
+        headers: { 'X-JARVIS-TOKEN': token }
+      });
+      const data = await resp.json();
+      if (data.status === 'success') setMacros(data.macros);
+    } catch (e) { console.error("Failed to fetch macros", e); }
+  }, [api, token]);
+
+  useEffect(() => {
+    if (mode === 'macros') fetchMacros();
+  }, [mode, fetchMacros]);
 
   useEffect(() => {
     if (outputRef.current) {
@@ -42,13 +64,61 @@ export default function DevWorkspace({ api, token }) {
     }
   };
 
+  const createMacro = async () => {
+    if (!macroName || macroSteps.length === 0) return;
+    setProcessing(true);
+    try {
+      const resp = await fetch(`${api}/api/macros/create`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-JARVIS-TOKEN': token },
+        body: JSON.stringify({ name: macroName, steps: macroSteps }),
+      });
+      if (resp.ok) {
+        setMacroName('');
+        setMacroSteps([]);
+        fetchMacros();
+      }
+    } catch (e) { console.error("Macro creation failed", e); }
+    finally { setProcessing(false); }
+  };
+
+  const executeMacro = async (id) => {
+    setProcessing(true);
+    setResponse('Starting neural macro execution sequence...');
+    try {
+      const resp = await fetch(`${api}/api/macros/execute`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-JARVIS-TOKEN': token },
+        body: JSON.stringify({ macro_id: id }),
+      });
+      const data = await resp.json();
+      setResponse(JSON.stringify(data.results, null, 2));
+    } catch (e) { setResponse(`Macro execution failed: ${e.message}`); }
+    finally { setProcessing(false); }
+  };
+
   return (
     <div className="flex flex-col h-full" data-testid="dev-workspace">
       {/* Toolbar */}
       <div className="flex items-center gap-3 px-4 py-2 border-b border-cyan-900/30">
-        <Code2 size={14} className="text-cyan-400" />
-        <span className="font-display text-[9px] tracking-widest text-cyan-300/50 uppercase">Developer Mode</span>
+        <div className="flex gap-2">
+          <button
+            onClick={() => setActiveMode('code')}
+            className={`px-3 py-1 text-[9px] font-display uppercase tracking-widest border ${mode === 'code' ? 'border-cyan-400 text-cyan-400 bg-cyan-950/30' : 'border-cyan-900/40 text-cyan-300/40'}`}
+          >
+            Code
+          </button>
+          <button
+            onClick={() => setActiveMode('macros')}
+            className={`px-3 py-1 text-[9px] font-display uppercase tracking-widest border ${mode === 'macros' ? 'border-cyan-400 text-cyan-400 bg-cyan-950/30' : 'border-cyan-900/40 text-cyan-300/40'}`}
+          >
+            Macros
+          </button>
+        </div>
+
         <span className="mx-auto" />
+
+        {mode === 'code' ? (
         <select
           value={language}
           onChange={(e) => setLanguage(e.target.value)}
@@ -65,29 +135,113 @@ export default function DevWorkspace({ api, token }) {
         </select>
       </div>
 
-      {/* Output */}
-      <div ref={outputRef} className="flex-1 overflow-y-auto p-4 font-mono text-xs leading-relaxed" data-testid="dev-output">
-        {!response && !processing && (
-          <div className="text-cyan-900/60 text-center mt-8">
-            <Code2 size={32} className="mx-auto mb-3 text-cyan-900/40" />
-            <p>Developer Mode Active</p>
-            <p className="text-[10px] mt-1">Ask JARVIS to build, debug, or architect code.</p>
-            <p className="text-[10px] mt-0.5">Press Ctrl+Enter to execute</p>
-          </div>
-        )}
-        {processing && (
-          <div className="text-cyan-400/60">
-            <span className="animate-typing-cursor">_</span> Generating code...
-          </div>
-        )}
-        {response && (
-          <div className="whitespace-pre-wrap text-cyan-100/90">
-            {response}
+      {/* Content Area */}
+      <div className="flex-1 overflow-hidden flex">
+        {/* Main Panel */}
+        <div ref={outputRef} className="flex-1 overflow-y-auto p-4 font-mono text-xs leading-relaxed border-r border-cyan-900/20">
+          {mode === 'code' ? (
+            <>
+              {!response && !processing && (
+                <div className="text-cyan-900/60 text-center mt-8">
+                  <Code2 size={32} className="mx-auto mb-3 text-cyan-900/40" />
+                  <p>Developer Mode Active</p>
+                  <p className="text-[10px] mt-1">Ask JARVIS to build, debug, or architect code.</p>
+                  <p className="text-[10px] mt-0.5">Press Ctrl+Enter to execute</p>
+                </div>
+              )}
+              {processing && (
+                <div className="text-cyan-400/60">
+                  <span className="animate-typing-cursor">_</span> Generating code...
+                </div>
+              )}
+              {response && (
+                <div className="whitespace-pre-wrap text-cyan-100/90">
+                  {response}
+                </div>
+              )}
+            </>
+          ) : (
+            <div className="space-y-6">
+              {/* Macro Creator */}
+              <div className="border border-cyan-900/30 bg-cyan-950/10 p-4">
+                <h4 className="text-cyan-400 text-[10px] uppercase tracking-widest mb-4">Neural Macro Architect</h4>
+                <input
+                  value={macroName} onChange={e => setMacroName(e.target.value)}
+                  placeholder="Macro name (e.g. Start Work)"
+                  className="w-full bg-black/40 border border-cyan-900/40 p-2 text-cyan-100 text-[10px] mb-3"
+                />
+
+                <div className="flex gap-2 mb-4">
+                  <select
+                    value={newStepType} onChange={e => setNewStepType(e.target.value)}
+                    className="bg-black/40 border border-cyan-900/40 p-2 text-cyan-300 text-[9px] uppercase"
+                  >
+                    <option value="command">Command</option>
+                    <option value="app">App</option>
+                    <option value="wait">Wait</option>
+                  </select>
+                  <input
+                    value={newStepValue} onChange={e => setNewStepValue(e.target.value)}
+                    placeholder="Value..."
+                    className="flex-1 bg-black/40 border border-cyan-900/40 p-2 text-cyan-100 text-[10px]"
+                  />
+                  <button
+                    onClick={() => {
+                      if (newStepValue) {
+                        setMacroSteps([...macroSteps, { type: newStepType, value: newStepValue }]);
+                        setNewStepValue('');
+                      }
+                    }}
+                    className="border border-cyan-500/40 p-2 text-cyan-400"
+                  >
+                    <Plus size={14} />
+                  </button>
+                </div>
+
+                <div className="space-y-2 mb-4">
+                  {macroSteps.map((s, i) => (
+                    <div key={i} className="flex justify-between items-center bg-cyan-900/10 p-2 border border-cyan-900/20">
+                      <span className="text-[9px] text-cyan-300/60 uppercase">[{s.type}] {s.value}</span>
+                      <button onClick={() => setMacroSteps(macroSteps.filter((_, idx) => idx !== i))} className="text-red-400/50 hover:text-red-400">
+                        <Trash2 size={12} />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+
+                <button
+                  onClick={createMacro}
+                  disabled={processing || !macroName || macroSteps.length === 0}
+                  className="w-full border border-green-500/40 text-green-400 py-2 text-[9px] uppercase tracking-widest hover:bg-green-950/20"
+                >
+                  Authorize Macro
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Sidebar for Macros */}
+        {mode === 'macros' && (
+          <div className="w-64 bg-black/20 p-4 overflow-y-auto">
+            <h4 className="text-cyan-300/40 text-[9px] uppercase tracking-widest mb-4">Registered Sequences</h4>
+            <div className="space-y-3">
+              {macros.map(m => (
+                <div key={m.id} className="border border-cyan-900/30 p-3 hover:border-cyan-400 transition-colors group cursor-pointer" onClick={() => executeMacro(m.id)}>
+                  <div className="flex justify-between items-center mb-1">
+                    <span className="text-cyan-100 text-[10px] uppercase font-bold">{m.name}</span>
+                    <Play size={10} className="text-cyan-400 opacity-0 group-hover:opacity-100" />
+                  </div>
+                  <div className="text-cyan-300/30 text-[8px]">{m.steps.length} steps programmed</div>
+                </div>
+              ))}
+            </div>
           </div>
         )}
       </div>
 
       {/* Input */}
+      {mode === 'code' && (
       <div className="border-t border-cyan-900/30 p-3">
         <textarea
           value={prompt}
@@ -109,6 +263,7 @@ export default function DevWorkspace({ api, token }) {
           </button>
         </div>
       </div>
+      )}
     </div>
   );
 }

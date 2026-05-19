@@ -17,6 +17,7 @@ export default function SettingsPanel({ api, token, preferences, onPreferencesCh
   const [enrolling, setEnrolling] = useState(false);
   const [enrollStatus, setEnrollStatus] = useState(null);
   const [enrolledFaces, setEnrolledFaces] = useState(0);
+  const [enrollName, setEnrollName] = useState('New User');
   const [safety, setSafety] = useState(null);
   const [auditEntries, setAuditEntries] = useState([]);
   const [checkpoints, setCheckpoints] = useState([]);
@@ -476,7 +477,7 @@ export default function SettingsPanel({ api, token, preferences, onPreferencesCh
       const resp = await fetch(`${api}/api/auth/enroll_face`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'X-JARVIS-TOKEN': token },
-        body: JSON.stringify({ image: imageData, label: 'owner' }),
+        body: JSON.stringify({ image: imageData, label: enrollName || 'New User' }),
       });
       const data = await resp.json();
       setEnrollStatus(data);
@@ -538,7 +539,21 @@ export default function SettingsPanel({ api, token, preferences, onPreferencesCh
         </div>
 
         {/* Controls */}
-        <div className="flex justify-center gap-3 mb-4">
+        <div className="flex flex-col items-center gap-4 mb-4">
+          {cameraActive && (
+            <div className="w-full max-w-[280px]">
+              <div className="font-display text-[8px] tracking-widest text-cyan-300/40 uppercase mb-2">User Identity</div>
+              <input
+                value={enrollName}
+                onChange={(e) => setEnrollName(e.target.value)}
+                placeholder="Enter user name..."
+                className="w-full bg-black/50 border border-cyan-900/40 px-3 py-2 text-xs font-mono text-cyan-100 placeholder-cyan-900 focus:border-cyan-500/60 focus:outline-none mb-3"
+                data-testid="enroll-name-input"
+              />
+            </div>
+          )}
+
+          <div className="flex justify-center gap-3">
           {!cameraActive ? (
             <button
               onClick={startCamera}

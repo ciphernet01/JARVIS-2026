@@ -32,16 +32,21 @@ export default function ArcReactor() {
       <div className="absolute inset-10 border border-cyan-500/15 rounded-full" />
 
       {/* Core glow */}
-      <div className="absolute inset-0 flex items-center justify-center">
+      <div className="absolute inset-0 flex items-center justify-center animate-holographic">
         <div className="w-16 h-16 rounded-full animate-pulse-glow" style={{
           background: 'radial-gradient(circle, rgba(6,182,212,0.3) 0%, transparent 70%)',
         }} />
       </div>
 
+      {/* Thinking Animation (Neural Expansion) */}
+      <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+        <div className="w-24 h-24 border border-cyan-400/20 rounded-full animate-neural-thinking" />
+      </div>
+
       {/* Center text */}
       <div className="absolute inset-0 flex flex-col items-center justify-center z-10">
-        <span className="font-display text-[9px] tracking-[0.2em] text-cyan-400/80 uppercase">Core</span>
-        <span className="font-display text-[8px] tracking-[0.15em] text-cyan-300/50 uppercase">Active</span>
+        <span className="font-display text-[9px] tracking-[0.2em] text-cyan-400/80 uppercase">Neural</span>
+        <span className="font-display text-[8px] tracking-[0.15em] text-cyan-300/50 uppercase">Linked</span>
       </div>
     </div>
   );
