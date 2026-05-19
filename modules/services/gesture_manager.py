@@ -32,8 +32,11 @@ from modules.vision.gesture_engine import (
     GESTURE_PEACE,
     GESTURE_SWIPE_LEFT,
     GESTURE_SWIPE_RIGHT,
+    GESTURE_PINCH_HOLD,
     ALL_GESTURES,
 )
+
+from modules.vision.vision_bridge import VisionOSBridge
 
 # Default gesture → action mapping
 DEFAULT_ACTION_MAP: Dict[str, Dict[str, Any]] = {
@@ -119,6 +122,7 @@ class GestureManager:
         self.max_hands = max_hands
 
         self._engine: Optional[GestureEngine] = None
+        self._bridge = VisionOSBridge()
         self._capture = None
         self._active = False
         self._thread: Optional[threading.Thread] = None
@@ -271,6 +275,10 @@ class GestureManager:
 
     def _process_gesture_event(self, result: GestureResult):
         """Track gesture stability and emit events."""
+        # Vision-to-OS Bridge (Virtual Mouse)
+        if self._bridge:
+            self._bridge.process_gesture(result)
+
         # Continuous streaming for spatial computing (bypasses stability lock)
         if self._spatial_callback:
             try:

@@ -63,12 +63,24 @@ python3-pydantic
 python3-motor
 python3-aiofiles
 python3-requests
+python3-numpy
+python3-scipy
+python3-tqdm
 
 # Display System (Minimal - text/web based)
 xserver-xorg
 xinit
 openbox
 xterm
+libgtk-3-0
+libnss3
+libxss1
+libasound2
+
+# AI Components
+espeak-ng
+ffmpeg
+libportaudio2
 
 # Web Server/Browser
 firefox

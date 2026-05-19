@@ -54,11 +54,18 @@ main() {
     mkdir -p /var/log/jarvis
     log_success "Directories created"
     
-    # 3. Python dependencies
-    log_info "Installing Python dependencies..."
+    # 3. Python & Node dependencies
+    log_info "Installing system dependencies..."
     cd "$JARVIS_HOME" || exit 1
     pip3 install -q -r requirements.txt
-    log_success "Python packages installed"
+    pip3 install -q openai-whisper ollama mediapipe pyautogui
+
+    log_info "Installing Neural Shell (Electron) dependencies..."
+    if [ -d "$JARVIS_HOME/desktop-overlay" ]; then
+        cd "$JARVIS_HOME/desktop-overlay"
+        npm install --quiet
+    fi
+    log_success "Dependencies installed (including AI/Vision/HUD layers)"
     
     # 4. Database initialization
     log_info "Initializing JARVIS database..."
@@ -111,11 +118,14 @@ main() {
     systemctl enable jarvis.service
     log_success "JARVIS service installed"
     
-    # 10. Voice training prompt
-    log_info "Voice system setup"
+    # 10. Voice & Vision setup
+    log_info "Voice & Vision system setup"
     echo -e "${YELLOW}"
-    echo "JARVIS uses voice recognition for authentication."
-    echo "Voice training will be configured on first login."
+    echo "JARVIS uses voice recognition and hand gestures for interaction."
+    echo "Downloading Whisper base model for offline speech recognition..."
+    # Pre-download Whisper model to avoid delay on first use
+    python3 -c "import whisper; whisper.load_model('base')"
+    echo "Local AI Core (Ollama) will be configured for optimal performance."
     echo -e "${NC}"
     
     # 11. Completion

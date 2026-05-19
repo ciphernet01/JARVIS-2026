@@ -5,11 +5,11 @@ After=network-online.target sound.target
 Wants=network-online.target
 
 [Service]
-Type=main
+Type=simple
 User=root
 WorkingDirectory=/opt/jarvis
 ExecStartPre=/usr/bin/mkdir -p /var/log/jarvis
-ExecStart=/usr/bin/python3 -u /opt/jarvis/backend/server.py
+ExecStart=/opt/jarvis/os-distribution/jarvis-shell-session.sh
 Restart=always
 RestartSec=5
 StandardOutput=journal
@@ -35,4 +35,4 @@ RestrictNamespaces=no
 SupplementaryGroups=audio video input dialout
 
 [Install]
-WantedBy=multi-user.target
+WantedBy=graphical.target

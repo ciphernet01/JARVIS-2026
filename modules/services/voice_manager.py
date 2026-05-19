@@ -27,6 +27,13 @@ except ImportError:
     logger.warning("speech_recognition not available, STT will be limited")
 
 try:
+    from modules.voice.whisper_recognizer import WhisperRecognizer
+    WHISPER_AVAILABLE = True
+except ImportError:
+    WHISPER_AVAILABLE = False
+    logger.warning("WhisperRecognizer not available, local STT disabled")
+
+try:
     import pyttsx3
     PYTTSX3_AVAILABLE = True
 except ImportError:
@@ -117,6 +124,7 @@ class VoiceManager:
         self._is_listening = False
         self._wake_word_enabled = False
         self._recognizer = None
+        self._whisper = None
         self._tts_engine = None
         self._last_command = None
         self._last_response = None
@@ -144,6 +152,14 @@ class VoiceManager:
                 logger.warning("Speech recognition unavailable, will use fallback")
         except Exception as e:
             logger.error(f"Failed to initialize recognizer: {e}")
+
+        try:
+            if WHISPER_AVAILABLE:
+                # Load small model for balance between speed and accuracy
+                self._whisper = WhisperRecognizer(model_name="base")
+                logger.info("Whisper STT engine initialized")
+        except Exception as e:
+            logger.error(f"Failed to initialize Whisper: {e}")
 
         try:
             if PYTTSX3_AVAILABLE:
@@ -233,11 +249,23 @@ class VoiceManager:
     def _process_audio(self, audio, language: str) -> Optional[VoiceCommand]:
         """Process audio and convert to text."""
         try:
-            # Try Google STT first
-            text = self._recognizer.recognize_google(audio, language=language)
+            text = ""
+            confidence = 0.0
 
-            # Calculate confidence (Google doesn't return confidence, so use 0.85 as default)
-            confidence = 0.85
+            # Try Local Whisper first for "Market Ready" zero-delay feel
+            if self._whisper:
+                import numpy as np
+                # Convert audio to numpy array for Whisper
+                audio_data = np.frombuffer(audio.get_raw_data(), np.int16).flatten().astype(np.float32) / 32768.0
+                text = self._whisper.transcribe(audio_data)
+                confidence = 0.9  # Whisper doesn't easily expose word-level confidence here
+                logger.info(f"Whisper recognized: {text}")
+
+            # Fallback to Google if Whisper fails or is unavailable
+            if not text and SPEECH_RECOGNITION_AVAILABLE:
+                text = self._recognizer.recognize_google(audio, language=language)
+                confidence = 0.85
+                logger.info(f"Google recognized (fallback): {text}")
 
             command = VoiceCommand(
                 text=text,

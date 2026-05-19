@@ -17,7 +17,7 @@ CompositeLLMManager = None
 
 
 def create_llm_manager(config: Any = None) -> Any:
-    """Create a Gemini-only LLM router."""
+    """Create an LLM router with Ollama primary and Gemini fallback."""
     cfg = config or ConfigManager()
     
     # If the user passed the full ConfigManager, extract the `llm` portion
@@ -36,19 +36,30 @@ def create_llm_manager(config: Any = None) -> Any:
     if gemini_cls is None or router_cls is None:
         gemini_module = import_module("modules.llm.gemini")
         router_module = import_module("modules.llm.router")
+        ollama_module = import_module("modules.llm.ollama")
 
         gemini_cls = gemini_cls or gemini_module.GeminiManager
         router_cls = router_cls or router_module.CompositeLLMManager
+        ollama_cls = ollama_module.OllamaManager
 
-    primary = gemini_cls(
-        api_key=gemini_api_key,
-        model=getattr(llm_cfg, "model", "gemini-2.5-flash"),
+    # Prefer Ollama for "Market Ready" zero-delay feel
+    primary = ollama_cls(
+        model=getattr(llm_cfg, "model", "llama3.1"),
         temperature=getattr(llm_cfg, "temperature", 0.2),
         top_p=getattr(llm_cfg, "top_p", 0.9),
         timeout_seconds=getattr(llm_cfg, "timeout_seconds", 60),
         system_prompt=getattr(llm_cfg, "system_prompt", None),
     )
 
-    router = router_cls(primary=primary, fallback=None)
-    logger.info("LLM router initialized with Gemini only")
+    fallback = gemini_cls(
+        api_key=gemini_api_key,
+        model="gemini-2.5-flash",
+        temperature=getattr(llm_cfg, "temperature", 0.2),
+        top_p=getattr(llm_cfg, "top_p", 0.9),
+        timeout_seconds=getattr(llm_cfg, "timeout_seconds", 60),
+        system_prompt=getattr(llm_cfg, "system_prompt", None),
+    )
+
+    router = router_cls(primary=primary, fallback=fallback)
+    logger.info("LLM router initialized with Ollama primary and Gemini fallback")
     return router
