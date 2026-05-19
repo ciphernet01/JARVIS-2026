@@ -135,7 +135,11 @@ class GeminiClient:
         messages: List[Dict[str, str]],
         tools: Optional[List[Dict[str, Any]]] = None,
     ) -> LLMResponse:
-        client = self._ensure_client()
+        try:
+            client = self._ensure_client()
+        except ConfigurationError as e:
+            raise IntegrationError(str(e))
+
         start = time.time()
         try:
             gemini_contents = self._to_gemini_contents(messages)
@@ -567,7 +571,18 @@ class LLMRouter:
         """Try providers in order, falling back on RateLimitError or IntegrationError."""
         last_error: Optional[Exception] = None
         for client, label in providers:
+            logger.debug(f"Attempting LLM call via {label}")
             try:
+                # Fast check for Ollama before trying network calls if it's the provider
+                if label.startswith("Ollama"):
+                    # Quick ping to check if local server is even up
+                    try:
+                        import requests
+                        requests.get(client.base_url.replace('/v1', '/api/tags'), timeout=0.5)
+                    except:
+                        logger.debug(f"{label} server unreachable, skipping")
+                        continue
+
                 response = await client.chat(messages, tools=tools)
                 self._log_call(response.call_log)
                 return response

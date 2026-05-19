@@ -25,6 +25,8 @@ export default function LoginScreen({ onLogin, api }) {
   const [faceBox, setFaceBox] = useState(null);
   const [faceInfo, setFaceInfo] = useState(null);
   const [scanPhase, setScanPhase] = useState(0);
+  const [showNeuralKey, setShowNeuralKey] = useState(false);
+  const [neuralKey, setNeuralKey] = useState('');
   const videoRef = useRef(null);
   const streamRef = useRef(null);
   const scanTimerRef = useRef(null);
@@ -132,17 +134,18 @@ export default function LoginScreen({ onLogin, api }) {
     }
   };
 
-  const handleBypass = async () => {
+  const handleNeuralKeyLogin = async () => {
+    if (!neuralKey) return;
     setScanning(true);
-    setScanPhase(0);
-    setStatus('AUTHORIZING PRODUCTION BYPASS...');
+    setStatus('VALIDATING NEURAL KEY...');
     try {
       const resp = await fetch(`${api}/api/auth/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          method: 'production_bypass',
+          method: 'neural_key',
           image: null,
+          key: neuralKey, // Backend would verify this
         }),
       });
       const data = await readAuthResponse(resp);
@@ -330,7 +333,7 @@ export default function LoginScreen({ onLogin, api }) {
         </p>
 
         {/* Auth Buttons */}
-        {!scanning && !granted && (
+        {!scanning && !granted && !showNeuralKey && (
           <div className="flex flex-col gap-3 justify-center items-center">
             <motion.button
               whileHover={{ scale: 1.02 }}
@@ -346,16 +349,46 @@ export default function LoginScreen({ onLogin, api }) {
               </span>
             </motion.button>
             
-            <motion.button
-              whileHover={{ scale: 1.02 }}
-              whileTap={{ scale: 0.98 }}
-              onClick={handleBypass}
-              className="px-8 py-2 border border-cyan-900/50 text-cyan-300/45 bg-cyan-950/10 font-display text-[10px] tracking-[0.2em] uppercase hover:bg-cyan-950/30 hover:text-cyan-200 hover:border-cyan-500/50 hover:shadow-[0_0_24px_rgba(6,182,212,0.16)] transition-all duration-200 w-full max-w-[280px]"
-              data-testid="login-bypass-button"
+            <button
+              onClick={() => setShowNeuralKey(true)}
+              className="mt-2 font-mono text-[9px] text-cyan-500/40 hover:text-cyan-400 uppercase tracking-widest transition-colors"
             >
-              Secure Protocol Override
-            </motion.button>
+              Use Neural Key Fallback
+            </button>
           </div>
+        )}
+
+        {/* Neural Key Input */}
+        {showNeuralKey && !scanning && !granted && (
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="w-full max-w-[280px] mx-auto"
+          >
+            <input
+              type="password"
+              value={neuralKey}
+              onChange={(e) => setNeuralKey(e.target.value)}
+              placeholder="ENTER NEURAL ACCESS KEY..."
+              className="w-full bg-black/60 border border-cyan-500/30 px-4 py-3 text-sm font-mono text-cyan-100 placeholder-cyan-900 focus:border-cyan-400 focus:outline-none mb-4 text-center tracking-[0.5em]"
+              autoFocus
+              onKeyDown={(e) => e.key === 'Enter' && handleNeuralKeyLogin()}
+            />
+            <div className="flex gap-2">
+              <button
+                onClick={handleNeuralKeyLogin}
+                className="flex-1 border border-cyan-500/60 text-cyan-400 py-2 font-display text-[10px] tracking-widest uppercase hover:bg-cyan-950/40"
+              >
+                Authorize
+              </button>
+              <button
+                onClick={() => setShowNeuralKey(false)}
+                className="px-4 border border-cyan-900/40 text-cyan-300/40 py-2 font-display text-[10px] tracking-widest uppercase hover:text-cyan-100"
+              >
+                Back
+              </button>
+            </div>
+          </motion.div>
         )}
 
         {/* Hint after failure */}

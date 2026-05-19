@@ -86,24 +86,43 @@ class Assistant:
         if getattr(self.config, "llm", None) and self.config.llm.enabled:
             try:
                 self.llm_router = LLMRouter(self.config)
+
+                # Combine system tools with modular JARVIS skills
+                combined_tools = {
+                    "run_shell": run_shell,
+                    "write_file": write_file,
+                    "read_file": read_file,
+                    "list_directory": list_directory,
+                    "run_python": run_python,
+                    "run_node": run_node,
+                    "search_web": search_web,
+                    "fetch_url": fetch_url,
+                    "press_key": press_key,
+                    "type_text": type_text,
+                    "click_screen": click_screen,
+                    "send_notification": send_notification,
+                }
+
+                # Expose SkillRegistry skills as tools for the brain
+                if self.skill_registry:
+                    for name, skill in getattr(self.skill_registry, "skills", {}).items():
+                        # Create a wrapper function that matches ReActAgent expectation
+                        def make_skill_tool(s):
+                            def skill_tool(query: str) -> dict:
+                                """Execute a system skill."""
+                                res = s.execute(query, self.user_context)
+                                return {"success": True, "output": res, "error": None}
+                            skill_tool.__name__ = s.name
+                            skill_tool.__doc__ = s.description
+                            return skill_tool
+
+                        combined_tools[name] = make_skill_tool(skill)
+
                 self.react_agent = ReActAgent(
                     llm_router=self.llm_router,
-                    tools={
-                        "run_shell": run_shell,
-                        "write_file": write_file,
-                        "read_file": read_file,
-                        "list_directory": list_directory,
-                        "run_python": run_python,
-                        "run_node": run_node,
-                        "search_web": search_web,
-                        "fetch_url": fetch_url,
-                        "press_key": press_key,
-                        "type_text": type_text,
-                        "click_screen": click_screen,
-                        "send_notification": send_notification,
-                    },
+                    tools=combined_tools,
                 )
-                logger.info("ReActAgent initialized with tool suite")
+                logger.info(f"ReActAgent initialized with {len(combined_tools)} tools (including skills)")
             except Exception as exc:
                 logger.warning(f"ReActAgent initialization failed: {exc}")
 
