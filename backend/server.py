@@ -72,6 +72,7 @@ face_cascade = cv2.CascadeClassifier(FACE_CASCADE_PATH)
 
 # Enrolled face storage (in MongoDB)
 FACE_COLLECTION = "enrolled_faces"
+MACRO_COLLECTION = "neural_macros"
 
 app = FastAPI(title="JARVIS Neural Interface API", version="2.0")
 
@@ -550,6 +551,21 @@ class MemoryEntry(BaseModel):
     user: str
     assistant: str
     tags: Optional[List[str]] = None
+
+
+class MacroStep(BaseModel):
+    type: str  # "command", "app", "service", "wait"
+    value: str
+    params: Optional[Dict[str, Any]] = None
+
+class MacroCreateRequest(BaseModel):
+    name: str
+    description: Optional[str] = ""
+    steps: List[MacroStep]
+    trigger_phrase: Optional[str] = None
+
+class MacroExecuteRequest(BaseModel):
+    macro_id: str
 
 
 # ── Audit Logging Helper ───────────────────────────────────────────────────
@@ -1432,6 +1448,8 @@ async def login(req: LoginRequest):
     face_confidence = 0.0
     face_box = None  # {x, y, w, h} for frontend to draw rectangle
     verification_method = req.method
+    identified_user_id = "shrey_ceo"
+    identified_user_name = "Sir"
 
     if req.method in {"camera_unavailable", "production_bypass"} and not req.image:
         verification_method = "camera_unavailable_bypass"
@@ -1498,22 +1516,27 @@ async def login(req: LoginRequest):
                             if score > best_score:
                                 best_score = score
                                 matched_against = f"imagedata/{ref_path.name}"
+                                # Check for name in filename like "tony_stark.jpg"
+                                name_part = ref_path.stem.replace('_', ' ').title()
+                                identified_user_name = name_part
+                                identified_user_id = ref_path.stem.lower()
                         except Exception:
                             continue
 
-                    # Method 2: Check MongoDB enrolled faces
-                    enrolled = await db[FACE_COLLECTION].find_one({"label": "owner"})
-                    if enrolled:
+                    # Method 2: Check MongoDB enrolled faces (all enrolled users)
+                    async for enrolled in db[FACE_COLLECTION].find({}):
                         stored_hist = np.array(enrolled["histogram"], dtype=np.float32)
                         score = cv2.compareHist(candidate_hist, stored_hist, cv2.HISTCMP_CORREL)
                         if score > best_score:
                             best_score = score
-                            matched_against = "enrolled_profile"
+                            matched_against = f"enrolled:{enrolled['label']}"
+                            identified_user_id = enrolled.get("user_id", "unknown_user")
+                            identified_user_name = enrolled.get("label", "Unknown").title()
 
                     face_confidence = max(0.0, best_score)
 
                     # If we have reference data and score is too low, deny
-                    if (ref_paths or enrolled) and best_score < 0.3:
+                    if (ref_paths or await db[FACE_COLLECTION].count_documents({})) and best_score < 0.3:
                         return {
                             "success": False,
                             "message": f"Face not recognized. Similarity: {best_score:.2f}. Access denied.",
@@ -1523,7 +1546,7 @@ async def login(req: LoginRequest):
                         }
 
                     # If no reference data exists, accept any face
-                    if not ref_paths and not enrolled:
+                    if not ref_paths and not await db[FACE_COLLECTION].count_documents({}):
                         face_confidence = 1.0
                         matched_against = "no_reference_enrolled"
 
@@ -1543,8 +1566,8 @@ async def login(req: LoginRequest):
 
     token = str(uuid.uuid4())
     user_data = {
-        "user_id": "shrey_ceo",
-        "user_name": "Sir",
+        "user_id": identified_user_id,
+        "user_name": identified_user_name,
         "login_time": datetime.now(timezone.utc).isoformat(),
         "method": verification_method,
         "face_detected": face_detected,
@@ -1563,17 +1586,23 @@ async def login(req: LoginRequest):
     except Exception as e:
         logger.warning(f"Session persistence unavailable, continuing with in-memory token: {e}")
 
-    message = "Biometric verification complete. Welcome back, Sir."
+    message = f"Biometric verification complete. Welcome back, {identified_user_name}."
     if face_detected:
-        message = f"Face recognized (confidence: {face_confidence:.0%}). Welcome back, Sir."
+        message = f"Face recognized (confidence: {face_confidence:.0%}). Welcome back, {identified_user_name}."
     elif verification_method == "camera_unavailable_bypass":
-        message = "Camera offline. Production bypass authorized. Welcome back, Sir."
+        message = f"Camera offline. Production bypass authorized. Welcome back, {identified_user_name}."
+
+    # Update assistant context to the identified user
+    assistant = _get_assistant()
+    if assistant:
+        assistant.set_current_user(identified_user_id)
+        assistant.set_user_context("user_name", identified_user_name)
 
     return {
         "success": True,
         "token": token,
         "message": message,
-        "user": {"name": "Sir", "id": "shrey_ceo"},
+        "user": {"name": identified_user_name, "id": identified_user_id},
         "face_detected": face_detected,
         "face_box": face_box,
         "confidence": face_confidence,
@@ -3476,6 +3505,75 @@ async def add_memory(req: MemoryEntry, user=Depends(verify_token)):
     entry = engine.add_episodic_memory(req.user, req.assistant, req.tags)
     _audit_action(user, "memory_add", {"id": entry["id"]})
     return {"status": "success", "entry": entry}
+
+
+# ── Neural Macros ──────────────────────────────────────────────────────────
+
+@app.post("/api/macros/create")
+async def create_macro(req: MacroCreateRequest, user=Depends(verify_token)):
+    """Create a new Neural Macro orchestration."""
+    macro_data = {
+        "user_id": user["user_id"],
+        "name": req.name,
+        "description": req.description,
+        "steps": [step.dict() for step in req.steps],
+        "trigger_phrase": req.trigger_phrase,
+        "created_at": datetime.now(timezone.utc).isoformat()
+    }
+    result = await db[MACRO_COLLECTION].insert_one(macro_data)
+    _audit_action(user, "macro_create", {"name": req.name})
+    return {"status": "success", "macro_id": str(result.inserted_id)}
+
+@app.get("/api/macros/list")
+async def list_macros(user=Depends(verify_token)):
+    """List all registered Neural Macros for the user."""
+    macros = []
+    async for doc in db[MACRO_COLLECTION].find({"user_id": user["user_id"]}):
+        doc["id"] = str(doc.pop("_id"))
+        macros.append(doc)
+    return {"status": "success", "macros": macros}
+
+@app.post("/api/macros/execute")
+async def execute_macro(req: MacroExecuteRequest, user=Depends(verify_token)):
+    """Execute a Neural Macro sequence."""
+    from bson import ObjectId
+    macro = await db[MACRO_COLLECTION].find_one({"_id": ObjectId(req.macro_id), "user_id": user["user_id"]})
+    if not macro:
+        raise HTTPException(status_code=404, detail="Macro not found")
+
+    logger.info(f"Executing Macro: {macro['name']}")
+    results = []
+
+    for step in macro["steps"]:
+        step_type = step["type"]
+        value = step["value"]
+
+        logger.info(f"Macro Step: {step_type} - {value}")
+
+        try:
+            if step_type == "command":
+                # Process via ReActAgent / Assistant
+                assistant = _get_assistant()
+                resp = await assistant.process_query_async(value)
+                results.append({"step": value, "status": "executed", "response": resp})
+
+            elif step_type == "app":
+                # Launch application
+                _launch_allowed_app(value, dry_run=False, confirmed=True)
+                results.append({"step": f"Launch {value}", "status": "launched"})
+
+            elif step_type == "wait":
+                # Sleep for specified seconds
+                wait_time = int(value)
+                await asyncio.sleep(wait_time)
+                results.append({"step": f"Wait {wait_time}s", "status": "completed"})
+
+        except Exception as e:
+            logger.error(f"Macro step failed: {e}")
+            results.append({"step": value, "status": "failed", "error": str(e)})
+
+    _audit_action(user, "macro_execute", {"name": macro["name"]})
+    return {"status": "success", "macro": macro["name"], "results": results}
 
 
 if __name__ == "__main__":

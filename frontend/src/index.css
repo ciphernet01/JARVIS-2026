@@ -121,6 +121,21 @@ body.jarvis-reduced-motion *::after {
   50% { opacity: 1; box-shadow: 0 0 40px rgba(6, 182, 212, 0.6); }
 }
 
+@keyframes holographic-flicker {
+  0% { opacity: 0.8; filter: brightness(1); }
+  10% { opacity: 0.9; filter: brightness(1.2); }
+  20% { opacity: 0.8; filter: brightness(1); }
+  50% { opacity: 1; filter: brightness(1.1); }
+  80% { opacity: 0.85; filter: brightness(0.9); }
+  100% { opacity: 0.8; filter: brightness(1); }
+}
+
+@keyframes neural-thinking {
+  0% { transform: scale(1); opacity: 0.3; }
+  50% { transform: scale(1.5); opacity: 0.8; }
+  100% { transform: scale(1); opacity: 0.3; }
+}
+
 @keyframes reactor-spin {
   from { transform: rotate(0deg); }
   to { transform: rotate(360deg); }
@@ -149,6 +164,8 @@ body.jarvis-reduced-motion *::after {
 
 .animate-scan { animation: scan 4s linear infinite; }
 .animate-pulse-glow { animation: pulse-glow 3s ease-in-out infinite; }
+.animate-holographic { animation: holographic-flicker 5s ease-in-out infinite; }
+.animate-neural-thinking { animation: neural-thinking 2s ease-in-out infinite; }
 .animate-reactor-spin { animation: reactor-spin 60s linear infinite; }
 .animate-reactor-counter { animation: reactor-counter 45s linear infinite; }
 .animate-typing-cursor { animation: typing-cursor 1s step-end infinite; }
