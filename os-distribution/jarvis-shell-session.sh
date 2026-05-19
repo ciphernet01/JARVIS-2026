@@ -29,7 +29,10 @@ while ! curl -s http://localhost:8001/health > /dev/null; do
     sleep 1
 done
 
-# 6. Launch Electron HUD (The Neural Shell)
+# 6. Ensure Biometric Reference Directory exists
+mkdir -p /opt/jarvis/imagedata
+
+# 7. Launch Electron HUD (The Neural Shell)
 cd /opt/jarvis/desktop-overlay
 # Note: npm start in production usually translates to electron .
 # We use --no-sandbox because we are running as root in some live environments

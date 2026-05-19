@@ -19,9 +19,10 @@ export default function StatusPanel({ status }) {
   };
 
   const rows = [
-    { label: 'LLM Provider', value: status.llm_provider || 'N/A', online: status.llm_available },
+    { label: 'AI Core', value: status.llm_provider || 'Local Ollama', online: status.llm_available },
+    { label: 'Vision Engine', value: status.vision_enabled ? 'Ready' : 'Offline', online: status.vision_enabled },
     { label: 'Conversations', value: String(status.conversation_count || 0) },
-    { label: 'Platform', value: status.platform || 'N/A' },
+    { label: 'Platform', value: status.platform || 'Debian Neural Shell' },
     { label: 'Uptime', value: formatUptime(status.uptime_seconds || 0) },
     { label: 'Skills', value: String((status.skills || []).length) },
   ];

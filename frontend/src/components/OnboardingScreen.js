@@ -39,7 +39,18 @@ export default function OnboardingScreen({ api, token, onComplete, onOpenSetting
 
   useEffect(() => {
     fetchReadiness();
-  }, [fetchReadiness]);
+    // Play voice greeting on start
+    const playGreeting = async () => {
+      try {
+        await fetch(`${api}/api/os/voice/speak`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-JARVIS-TOKEN': token },
+          body: JSON.stringify({ text: "Welcome to J.A.R.V.I.S Operating System. I am conducting a final readiness scan of your neural shell. Please review the checklist while I calibrate your systems." }),
+        });
+      } catch (e) { console.warn("Voice onboarding greeting failed", e); }
+    };
+    playGreeting();
+  }, [fetchReadiness, api, token]);
 
   const createCheckpoint = async () => {
     setActionBusy(true);
