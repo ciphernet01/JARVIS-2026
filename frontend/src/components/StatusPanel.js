@@ -1,5 +1,4 @@
 import React from 'react';
-import { Activity, Database, Cpu, Zap, Clock } from 'lucide-react';
 
 export default function StatusPanel({ status }) {
   if (!status) {

@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { Send, Code2, FileCode, Play, List, Plus, Trash2, CheckCircle2 } from 'lucide-react';
+import { Code2, Play, Plus, Trash2 } from 'lucide-react';
 
 export default function DevWorkspace({ api, token }) {
   const [prompt, setPrompt] = useState('');
@@ -119,20 +119,21 @@ export default function DevWorkspace({ api, token }) {
         <span className="mx-auto" />
 
         {mode === 'code' ? (
-        <select
-          value={language}
-          onChange={(e) => setLanguage(e.target.value)}
-          className="bg-black/60 border border-cyan-900/40 text-cyan-300 text-[10px] font-mono px-2 py-1 focus:outline-none"
-          data-testid="language-selector"
-        >
-          <option value="python">Python</option>
-          <option value="javascript">JavaScript</option>
-          <option value="typescript">TypeScript</option>
-          <option value="react">React</option>
-          <option value="rust">Rust</option>
-          <option value="go">Go</option>
-          <option value="html">HTML/CSS</option>
-        </select>
+          <select
+            value={language}
+            onChange={(e) => setLanguage(e.target.value)}
+            className="bg-black/60 border border-cyan-900/40 text-cyan-300 text-[10px] font-mono px-2 py-1 focus:outline-none"
+            data-testid="language-selector"
+          >
+            <option value="python">Python</option>
+            <option value="javascript">JavaScript</option>
+            <option value="typescript">TypeScript</option>
+            <option value="react">React</option>
+            <option value="rust">Rust</option>
+            <option value="go">Go</option>
+            <option value="html">HTML/CSS</option>
+          </select>
+        ) : null}
       </div>
 
       {/* Content Area */}

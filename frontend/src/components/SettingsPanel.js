@@ -583,6 +583,7 @@ export default function SettingsPanel({ api, token, preferences, onPreferencesCh
             </>
           )}
         </div>
+      </div>
 
         {/* Status */}
         {enrollStatus && (
