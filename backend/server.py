@@ -212,6 +212,7 @@ _system_manager: Optional[SystemManager] = None
 _memory_engine: Optional[MemoryEngine] = None
 _proactive_service: Optional[ProactiveService] = None
 _voice_router = None
+_voice_callbacks = None
 
 
 def _get_network_manager() -> NetworkManager:
@@ -370,6 +371,17 @@ def _get_voice_router():
 
         _voice_router = VoiceCommandRouter(_get_assistant(), _get_voice_manager())
     return _voice_router
+
+
+def _get_voice_callbacks():
+    """Get and register voice callbacks."""
+    global _voice_callbacks
+    if _voice_callbacks is None:
+        from modules.agent.voice_router import VoiceCallbacks
+        _voice_callbacks = VoiceCallbacks(_get_assistant(), _get_voice_manager())
+        _voice_callbacks.register_all()
+        logger.info("Voice callbacks registered with VoiceManager")
+    return _voice_callbacks
 
 
 def _get_service_manager() -> ServiceManager:
