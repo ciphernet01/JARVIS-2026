@@ -73,6 +73,7 @@ class Assistant:
         self.memory = MemoryManager(self.persistence) if self.persistence else None
         self.project_index_store = self.persistence.get("project_index_store") if self.persistence else None
         self.project_index: Dict[str, Any] = {}
+        self.user_context: Dict[str, Any] = {}
         self.agent_manager = AgentManager(
             llm_manager=self.llm_manager,
             skill_registry=self.skill_registry,
@@ -106,14 +107,13 @@ class Assistant:
             except Exception as exc:
                 logger.warning(f"ReActAgent initialization failed: {exc}")
 
-        self._refresh_project_index()
-
         self.is_running = False
         self.conversation_history: list = []
-        self.user_context: Dict[str, Any] = {}
         self.on_response_callbacks: list = []
         self.session_token = None
         self.current_user_id: Optional[str] = None
+
+        self._refresh_project_index()
 
         logger.info("JARVIS Assistant initialized")
 

@@ -1,0 +1,27 @@
+{
+  "GESTURE_OPEN_PALM": {
+    "action": "minimize_window",
+    "label": "Minimize JARVIS",
+    "description": "Open palm minimizes the Electron shell to the tray"
+  },
+  "GESTURE_FIST": {
+    "action": "toggle_launcher",
+    "label": "Toggle Bento Launcher",
+    "description": "Closed fist triggers the application grid"
+  },
+  "GESTURE_SWIPE_LEFT": {
+    "action": "prev_panel",
+    "label": "Previous Panel",
+    "description": "Swipe left to cycle backward through HUD modules"
+  },
+  "GESTURE_SWIPE_RIGHT": {
+    "action": "next_panel",
+    "label": "Next Panel",
+    "description": "Swipe right to cycle forward through HUD modules"
+  },
+  "GESTURE_THUMBS_UP": {
+    "action": "confirm_notification",
+    "label": "Confirm / Dismiss Notification",
+    "description": "Thumbs up to acknowledge the current alert"
+  }
+}

@@ -7,17 +7,29 @@ import CalendarWidget from './CalendarWidget';
 import StatusPanel from './StatusPanel';
 import DevWorkspace from './DevWorkspace';
 import FilesystemExplorer from './FilesystemExplorer';
-import SystemControlPanel from './SystemControlPanel';
+import SystemControlHUD from './SystemControlHUD';
 import VoiceAnalyticsPanel from './VoiceAnalyticsPanel';
 import SettingsPanel from './SettingsPanel';
+import GestureControlPanel from './GestureControlPanel';
+import SpatialCursor from './SpatialCursor';
 import BottomDock from './BottomDock';
-import { Code2, Terminal as TermIcon, Settings, Zap, FolderOpen, ShieldCheck } from 'lucide-react';
+import NeuralInsights from './NeuralInsights';
+import BentoLauncher from './BentoLauncher';
+import NotificationHUD from './NotificationHUD';
+import { Code2, Terminal as TermIcon, Settings, Zap, FolderOpen, ShieldCheck, Hand, Minus, X, LayoutGrid } from 'lucide-react';
 
 function normalizeApiBase(api) {
   if (typeof api !== 'string') return '';
   const trimmed = api.trim();
   if (!trimmed || trimmed === '/' || trimmed === 'undefined' || trimmed === 'null') return '';
   return trimmed.replace(/\/+$/, '');
+}
+
+function buildWsUrl(apiBase, path) {
+  if (!apiBase) {
+    return `ws://${window.location.hostname}:8001${path}`;
+  }
+  return `${apiBase.replace(/^http/, 'ws')}${path}`;
 }
 
 export default function Dashboard({ token, api, onLogout, initialPanel = 'control', preferences, onPreferencesChange }) {
@@ -34,6 +46,10 @@ export default function Dashboard({ token, api, onLogout, initialPanel = 'contro
   const statusInFlight = useRef(false);
   const apiBase = useMemo(() => normalizeApiBase(api), [api]);
   const telemetryRefreshMs = Math.max(3, Math.min(30, preferences?.telemetry_refresh_seconds || 5)) * 1000;
+  
+  const isDesktop = !!window.JARVIS_DESKTOP;
+  const [isLauncherOpen, setIsLauncherOpen] = useState(false);
+  const [lastGesture, setLastGesture] = useState('GESTURE_NONE');
 
   const fetchMetrics = useCallback(async () => {
     if (metricsInFlight.current) return;
@@ -101,8 +117,74 @@ export default function Dashboard({ token, api, onLogout, initialPanel = 'contro
     setActivePanel(initialPanel);
   }, [initialPanel]);
 
+  // ── Global Gesture Integration ──────────────────────────────────────────
+  useEffect(() => {
+    // Ensure gesture engine is actively running in the background for global OS bounds
+    // Delay by 1.5s to ensure the browser has fully released the webcam hardware handle from LoginScreen
+    const startTimeout = setTimeout(() => {
+      fetch(`${apiBase}/api/gesture/start`, {
+        method: 'POST',
+        headers: { 'X-JARVIS-TOKEN': token, 'Content-Type': 'application/json' }
+      }).catch(() => {});
+    }, 1500);
+
+    const wsUrl = buildWsUrl(apiBase, '/ws/gestures');
+    const ws = new WebSocket(wsUrl);
+
+    ws.onmessage = (event) => {
+      const msg = JSON.parse(event.data);
+      if (msg.type === 'gesture') {
+        const gesture = msg.data.gesture;
+        setLastGesture(gesture);
+
+        // Global Gesture Logic
+        if (gesture === 'CLOSED_FIST' || gesture === 'GESTURE_FIST') {
+          setIsLauncherOpen(prev => !prev);
+        } else if (gesture === 'SWIPE_RIGHT' || gesture === 'GESTURE_SWIPE_RIGHT') {
+          const nextMap = { terminal: 'os', os: 'filesystem', filesystem: 'analytics', analytics: 'terminal' };
+          setActivePanel(prev => nextMap[prev] || 'terminal');
+        } else if (gesture === 'SWIPE_LEFT' || gesture === 'GESTURE_SWIPE_LEFT') {
+          const prevMap = { terminal: 'analytics', analytics: 'filesystem', filesystem: 'os', os: 'terminal' };
+          setActivePanel(prev => prevMap[prev] || 'terminal');
+        } else if ((gesture === 'OPEN_PALM' || gesture === 'GESTURE_OPEN_PALM') && window.JARVIS_DESKTOP) {
+          window.JARVIS_DESKTOP.windowControl('minimize');
+        }
+      }
+    };
+
+    return () => {
+      clearTimeout(startTimeout);
+      ws.close();
+    };
+  }, [apiBase, token]);
+
   return (
-    <div className={`h-screen flex flex-col overflow-hidden ${biosMode ? 'bios-mode' : ''}`} data-testid="jarvis-dashboard">
+    <div className={`h-screen flex flex-col overflow-hidden ${biosMode ? 'bios-mode' : ''} ${isDesktop ? 'pt-8' : ''}`} data-testid="jarvis-dashboard">
+      {/* Electron Draggable Titlebar */}
+      {isDesktop && (
+        <div className="absolute top-0 left-0 right-0 h-8 z-[1000] flex items-center justify-between px-4 bg-slate-950/90 border-b border-cyan-900/30" 
+             style={{ WebkitAppRegion: 'drag' }}>
+          <div className="text-[10px] text-cyan-500/50 tracking-[0.2em] font-bold">
+            JARVIS // NEURAL SHELL v2.5
+          </div>
+          <div className="flex gap-2" style={{ WebkitAppRegion: 'no-drag' }}>
+            <button 
+              onClick={() => window.JARVIS_DESKTOP.windowControl('minimize')}
+              className="text-slate-500 hover:text-cyan-400 transition-colors p-1"
+              title="Minimize"
+            >
+              <Minus size={14} />
+            </button>
+            <button 
+              onClick={() => window.JARVIS_DESKTOP.windowControl('close')}
+              className="text-slate-500 hover:text-red-400 transition-colors p-1"
+              title="Close System"
+            >
+              <X size={14} />
+            </button>
+          </div>
+        </div>
+      )}
       {/* Top Bar */}
       <header className="flex items-center justify-between px-6 py-3 border-b border-cyan-900/50 bg-slate-950/80 backdrop-blur-xl z-40" data-testid="top-bar">
         <div className="flex items-center gap-4">
@@ -123,6 +205,13 @@ export default function Dashboard({ token, api, onLogout, initialPanel = 'contro
             <span className={`w-2 h-2 rounded-full ${fetchError ? 'bg-amber-400' : 'bg-green-400'} animate-pulse`} />
             <span className={`font-mono text-[10px] tracking-widest ${fetchError ? 'text-amber-400' : 'text-green-400'}`}>{fetchError ? 'DEGRADED' : 'ONLINE'}</span>
           </div>
+          <button 
+            onClick={() => setIsLauncherOpen(true)}
+            className="p-2 text-cyan-500/60 hover:text-cyan-400 hover:bg-cyan-500/10 transition-all rounded-sm border border-transparent hover:border-cyan-500/20 mr-2"
+            title="Bento Launcher"
+          >
+            <LayoutGrid size={18} />
+          </button>
           <button
             type="button"
             onClick={() => setBiosMode((prev) => !prev)}
@@ -200,6 +289,15 @@ export default function Dashboard({ token, api, onLogout, initialPanel = 'contro
                 <Code2 size={14} /> Developer Mode
               </button>
               <button
+                onClick={() => setActivePanel('gesture')}
+                className={`flex items-center gap-2 px-4 py-2 text-xs font-display tracking-wider uppercase transition-all ${
+                  activePanel === 'gesture' ? 'text-cyan-400 bg-cyan-950/40 border-b border-cyan-400' : 'text-cyan-300/50 hover:text-cyan-300'
+                }`}
+                data-testid="tab-gesture"
+              >
+                <Hand size={14} /> Gesture Control
+              </button>
+              <button
                 onClick={() => setActivePanel('settings')}
                 className={`flex items-center gap-2 px-4 py-2 text-xs font-display tracking-wider uppercase transition-all ${
                   activePanel === 'settings' ? 'text-cyan-400 bg-cyan-950/40 border-b border-cyan-400' : 'text-cyan-300/50 hover:text-cyan-300'
@@ -209,12 +307,13 @@ export default function Dashboard({ token, api, onLogout, initialPanel = 'contro
                 <Settings size={14} /> Settings
               </button>
             </div>
-            <div className="flex-1 overflow-hidden">
-              {activePanel === 'control' && <SystemControlPanel api={apiBase} token={token} dashboardMetrics={metrics} telemetryFetching={telemetryFetching} refreshSeconds={preferences?.telemetry_refresh_seconds || 5} />}
+            <div className="flex-1 overflow-hidden" data-spatial-scope={activePanel}>
+              {activePanel === 'control' && <SystemControlHUD api={apiBase} token={token} />}
               {activePanel === 'terminal' && <Terminal api={apiBase} token={token} />}
               {activePanel === 'filesystem' && <FilesystemExplorer api={apiBase} token={token} />}
               {activePanel === 'analytics' && <VoiceAnalyticsPanel api={apiBase} token={token} />}
               {activePanel === 'developer' && <DevWorkspace api={apiBase} token={token} />}
+              {activePanel === 'gesture' && <GestureControlPanel api={apiBase} token={token} />}
               {activePanel === 'settings' && <SettingsPanel api={apiBase} token={token} preferences={preferences} onPreferencesChange={onPreferencesChange} />}
             </div>
           </div>
@@ -224,11 +323,20 @@ export default function Dashboard({ token, api, onLogout, initialPanel = 'contro
         <div className="col-span-3 flex flex-col gap-3 overflow-y-auto">
           <WeatherWidget weather={weather} />
           <StatusPanel status={status} />
+          <NeuralInsights api={apiBase} token={token} />
         </div>
       </main>
 
       {/* Bottom Dock */}
       <BottomDock activePanel={activePanel} setActivePanel={setActivePanel} onLogout={onLogout} />
+
+      <NotificationHUD api={apiBase} token={token} lastGesture={lastGesture} />
+      <SpatialCursor api={apiBase} scope={activePanel} />
+      <BentoLauncher 
+        isOpen={isLauncherOpen} 
+        onClose={() => setIsLauncherOpen(false)} 
+        onLaunch={(id) => setActivePanel(id)} 
+      />
     </div>
   );
 }

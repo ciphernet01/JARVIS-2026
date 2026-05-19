@@ -18,6 +18,8 @@ from .failover_drill_manager import FailoverDrillManager, FailoverDrillCheck, Fa
 from .release_evidence_manager import ReleaseEvidenceManager, ReleaseEvidenceItem, ReleaseEvidenceBundle
 from .release_manifest_manager import ReleaseManifestManager, ReleaseFile, ReleaseManifest
 from .release_update_manager import ReleaseUpdateManager, UpdateAction
+from .gesture_manager import GestureManager
+from .system_manager import SystemManager
 
 # Phase 2: AI Conversation Engine
 try:
@@ -80,6 +82,8 @@ __all__ = [
     "ReleaseManifest",
     "ReleaseUpdateManager",
     "UpdateAction",
+    "GestureManager",
+    "SystemManager",
     "AIConversationEngine",
     "ConversationMemory",
     "IntentExtractor",

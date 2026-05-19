@@ -1,4 +1,4 @@
-const { app, BrowserWindow, Menu, shell, screen } = require('electron');
+const { app, BrowserWindow, Menu, shell, screen, Tray, ipcMain } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const http = require('http');
@@ -8,9 +8,9 @@ const DEFAULT_URL = process.env.JARVIS_WEB_URL || 'http://localhost:3000';
 const BACKGROUND = '#020617';
 const ROOT_DIR = path.resolve(__dirname, '..');
 const LOCAL_BUILD = path.join(ROOT_DIR, 'frontend', 'build', 'index.html');
-const WINDOW_OPACITY = 0.5;
-
+const WINDOW_OPACITY = 0.85; // Increased default for better readability in shell
 let mainWindow = null;
+let tray = null;
 
 const singleInstanceLock = app.requestSingleInstanceLock();
 
@@ -85,6 +85,17 @@ function createWindow() {
     },
   });
 
+  // ── IPC Handlers ──────────────────────────────────────────────────────────
+  ipcMain.on('window-control', (event, action, value) => {
+    switch (action) {
+      case 'close': app.quit(); break;
+      case 'minimize': mainWindow.minimize(); break;
+      case 'set-opacity': mainWindow.setOpacity(value || WINDOW_OPACITY); break;
+      case 'set-always-on-top': mainWindow.setAlwaysOnTop(!!value); break;
+      case 'set-click-through': mainWindow.setIgnoreMouseEvents(!!value); break;
+    }
+  });
+
   Menu.setApplicationMenu(null);
 
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
@@ -101,6 +112,31 @@ function createWindow() {
 
   mainWindow.on('closed', () => {
     mainWindow = null;
+  });
+}
+
+function createTray() {
+  const iconPath = path.join(__dirname, 'assets', 'icon.png');
+  // Check if icon exists, fallback to empty if not (to avoid crash)
+  tray = new Tray(fs.existsSync(iconPath) ? iconPath : path.join(__dirname, 'package.json')); 
+  
+  const contextMenu = Menu.buildFromTemplate([
+    { label: 'JARVIS OS', enabled: false },
+    { type: 'separator' },
+    { label: 'Show Dashboard', click: () => { mainWindow.show(); mainWindow.focus(); } },
+    { label: 'Hide Dashboard', click: () => { mainWindow.hide(); } },
+    { type: 'separator' },
+    { label: 'Always on Top', type: 'checkbox', checked: true, click: (item) => { mainWindow.setAlwaysOnTop(item.checked); } },
+    { label: 'Click Through', type: 'checkbox', checked: false, click: (item) => { mainWindow.setIgnoreMouseEvents(item.checked); } },
+    { type: 'separator' },
+    { label: 'Quit JARVIS', click: () => { app.isQuitting = true; app.quit(); } }
+  ]);
+
+  tray.setToolTip('JARVIS Neural Interface');
+  tray.setContextMenu(contextMenu);
+  
+  tray.on('double-click', () => {
+    mainWindow.isVisible() ? mainWindow.hide() : mainWindow.show();
   });
 }
 
@@ -122,6 +158,7 @@ app.whenReady().then(async () => {
   }
 
   enableAutoLaunch();
+  createTray();
   await boot();
 
   app.on('activate', () => {

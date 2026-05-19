@@ -35,7 +35,9 @@ load_dotenv()
 # Import new JARVIS core
 from core import ConfigManager, Assistant
 from modules.skills import SkillFactory
-from modules.services import DeviceManager, ServiceManager, AudioManager, CameraManager, PowerManager, NetworkManager, VoiceManager, SafetyManager, PackageManager, HardwareValidationManager, HardwareStressManager, OSPreferencesManager, SecurityAuditManager, PerformanceBaselineManager, FailoverDrillManager, ReleaseEvidenceManager
+from modules.services import DeviceManager, ServiceManager, AudioManager, CameraManager, PowerManager, NetworkManager, VoiceManager, SafetyManager, PackageManager, HardwareValidationManager, HardwareStressManager, OSPreferencesManager, SecurityAuditManager, PerformanceBaselineManager, FailoverDrillManager, ReleaseEvidenceManager, GestureManager, SystemManager
+from modules.intelligence.memory_engine import MemoryEngine
+from modules.services.proactive_service import ProactiveService
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
@@ -62,6 +64,7 @@ CORS_ORIGINS = [
 
 # Session management
 SESSION_TOKENS = {}
+GESTURE_CLIENTS = set()
 
 # Face detection cascade
 FACE_CASCADE_PATH = cv2.data.haarcascades + "haarcascade_frontalface_default.xml"
@@ -203,6 +206,10 @@ _security_audit_manager: Optional[SecurityAuditManager] = None
 _performance_baseline_manager: Optional[PerformanceBaselineManager] = None
 _failover_drill_manager: Optional[FailoverDrillManager] = None
 _release_evidence_manager: Optional[ReleaseEvidenceManager] = None
+_gesture_manager: Optional[GestureManager] = None
+_system_manager: Optional[SystemManager] = None
+_memory_engine: Optional[MemoryEngine] = None
+_proactive_service: Optional[ProactiveService] = None
 _voice_router = None
 
 
@@ -285,6 +292,48 @@ def _get_release_evidence_manager() -> ReleaseEvidenceManager:
             hardware_stress_manager=_get_hardware_stress_manager(),
         )
     return _release_evidence_manager
+
+
+def _get_gesture_manager() -> GestureManager:
+    global _gesture_manager
+    if _gesture_manager is None:
+        _gesture_manager = GestureManager(workspace_root=str(WORKSPACE_ROOT))
+        
+        # Bridge gesture events to the global broadcast feed
+        def on_gesture_event(event):
+            asyncio.run_coroutine_threadsafe(
+                broadcast_gesture_event(event.to_dict()),
+                asyncio.get_event_loop()
+            )
+        
+        # Register for ALL major gestures
+        from modules.vision.gesture_engine import ALL_GESTURES
+        for g in ALL_GESTURES:
+            _gesture_manager.register_action_callback(_gesture_manager.get_action_map().get(g, {}).get("action"), on_gesture_event)
+            
+    return _gesture_manager
+
+
+def _get_system_manager() -> SystemManager:
+    global _system_manager
+    if _system_manager is None:
+        _system_manager = SystemManager()
+    return _system_manager
+
+
+def _get_memory_engine() -> MemoryEngine:
+    global _memory_engine
+    if _memory_engine is None:
+        _memory_engine = MemoryEngine(memory_path=str(WORKSPACE_ROOT / "memory" / "intelligence" / "episodic_memory.json"))
+    return _memory_engine
+
+
+def _get_proactive_service() -> ProactiveService:
+    global _proactive_service
+    if _proactive_service is None:
+        _proactive_service = ProactiveService(_get_memory_engine())
+        _proactive_service.start()
+    return _proactive_service
 
 
 def _get_assistant() -> Optional[Assistant]:
@@ -488,6 +537,83 @@ class PreferencesUpdateRequest(BaseModel):
     large_text: Optional[bool] = None
     scanlines: Optional[bool] = None
     telemetry_refresh_seconds: Optional[int] = None
+
+
+class GestureActionMapUpdate(BaseModel):
+    gesture: str
+    action: str
+    label: str = ""
+    description: str = ""
+
+
+class MemoryEntry(BaseModel):
+    user: str
+    assistant: str
+    tags: Optional[List[str]] = None
+
+
+# ── Audit Logging Helper ───────────────────────────────────────────────────
+def _audit_action(user: str, action: str, details: Optional[Dict[str, Any]] = None):
+    """Record an action to the system audit log."""
+    log_entry = {
+        "timestamp": time.time(),
+        "user": user,
+        "action": action,
+        "details": details or {}
+    }
+    logger.info(f"AUDIT: {user} performed {action} - {json.dumps(details or {})}")
+    # Persist to local JSON log
+    try:
+        log_dir = WORKSPACE_ROOT / "memory" / "logs"
+        log_dir.mkdir(parents=True, exist_ok=True)
+        log_file = log_dir / "audit.json"
+        
+        # Read existing logs
+        logs = []
+        if log_file.exists():
+            try:
+                logs = json.loads(log_file.read_text(encoding="utf-8"))
+            except Exception:
+                logs = []
+        
+        # Append and keep last 1000
+        logs.append(log_entry)
+        log_file.write_text(json.dumps(logs[-1000:], indent=2), encoding="utf-8")
+    except Exception as exc:
+        logger.warning(f"Failed to persist audit log: {exc}")
+
+
+async def broadcast_gesture_event(event_dict: Dict[str, Any]):
+    """Broadcast a gesture event to all connected WebSocket clients."""
+    if not GESTURE_CLIENTS:
+        return
+    
+    dead_clients = set()
+    message = json.dumps({"type": "gesture", "data": event_dict})
+    
+    for client_ws in GESTURE_CLIENTS:
+        try:
+            await client_ws.send_text(message)
+        except Exception:
+            dead_clients.add(client_ws)
+    
+    for dead in dead_clients:
+        GESTURE_CLIENTS.remove(dead)
+
+
+@app.websocket("/ws/gestures")
+async def gesture_websocket(websocket: WebSocket):
+    await websocket.accept()
+    GESTURE_CLIENTS.add(websocket)
+    try:
+        while True:
+            # Keep connection alive
+            await websocket.receive_text()
+    except WebSocketDisconnect:
+        GESTURE_CLIENTS.remove(websocket)
+    except Exception:
+        if websocket in GESTURE_CLIENTS:
+            GESTURE_CLIENTS.remove(websocket)
 
 
 # ── Auth ─────────────────────────────────────────────────────────────────────
@@ -2382,6 +2508,14 @@ class VolumeRequest(BaseModel):
     volume: float
 
 
+class SystemVolumeRequest(BaseModel):
+    level: int
+
+
+class SystemBrightnessRequest(BaseModel):
+    level: int
+
+
 @app.post("/api/os/audio/volume")
 async def os_audio_volume_set(request: VolumeRequest, user=Depends(verify_token)):
     """Set system volume level."""
@@ -3137,6 +3271,211 @@ async def voice_stream(websocket: WebSocket):
     except Exception as exc:
         logger.warning(f"Voice analytics stream error: {exc}")
         await websocket.close(code=1011)
+
+
+# ── Gesture Recognition Endpoints ────────────────────────────────────────────
+
+
+@app.get("/api/gesture/state")
+async def gesture_state(user=Depends(verify_token)):
+    """Return current gesture recognition state."""
+    manager = _get_gesture_manager()
+    return {"status": "success", **manager.state()}
+
+
+@app.post("/api/gesture/start")
+async def gesture_start(user=Depends(verify_token)):
+    """Start a gesture recognition session."""
+    manager = _get_gesture_manager()
+    result = manager.start()
+    _audit_action(user, "gesture_start", {"result": result.get("status")})
+    return result
+
+
+@app.post("/api/gesture/stop")
+async def gesture_stop(user=Depends(verify_token)):
+    """Stop the gesture recognition session."""
+    manager = _get_gesture_manager()
+    result = manager.stop()
+    _audit_action(user, "gesture_stop", {"result": result.get("status")})
+    return result
+
+
+@app.get("/api/gesture/frame")
+async def gesture_frame(user=Depends(verify_token)):
+    """Return the latest annotated gesture frame as base64 JPEG."""
+    manager = _get_gesture_manager()
+    frame_b64 = manager.current_frame_base64()
+    state = manager.state()
+    return {
+        "status": "success",
+        "frame": frame_b64,
+        "gesture": state.get("gesture"),
+        "confidence": state.get("confidence"),
+        "hand_count": state.get("hand_count"),
+        "pointer_x": state.get("pointer_x"),
+        "pointer_y": state.get("pointer_y"),
+        "pinch_distance": state.get("pinch_distance"),
+    }
+
+
+@app.get("/api/gesture/events")
+async def gesture_events(limit: int = 20, user=Depends(verify_token)):
+    """Return recent gesture events."""
+    manager = _get_gesture_manager()
+    events = manager.recent_events(limit=max(1, min(limit, 50)))
+    return {"status": "success", "events": events}
+
+
+@app.get("/api/gesture/actions")
+async def gesture_actions_get(user=Depends(verify_token)):
+    """Return the current gesture→action mapping."""
+    manager = _get_gesture_manager()
+    return {"status": "success", "action_map": manager.get_action_map()}
+
+
+@app.post("/api/gesture/actions")
+async def gesture_actions_update(body: GestureActionMapUpdate, user=Depends(verify_token)):
+    """Update a single gesture→action mapping."""
+    manager = _get_gesture_manager()
+    update = {
+        body.gesture: {
+            "action": body.action,
+            "label": body.label,
+            "description": body.description,
+        }
+    }
+    result = manager.update_action_map(update)
+    _audit_action(user, "gesture_action_update", {"gesture": body.gesture, "action": body.action})
+    return {"status": "success", **result}
+
+
+@app.post("/api/gesture/actions/reset")
+async def gesture_actions_reset(user=Depends(verify_token)):
+    """Reset gesture→action mapping to defaults."""
+    manager = _get_gesture_manager()
+    result = manager.reset_action_map()
+    _audit_action(user, "gesture_action_reset")
+    return {"status": "success", **result}
+
+
+@app.get("/api/gesture/capabilities")
+async def gesture_capabilities(user=Depends(verify_token)):
+    """Return gesture system capabilities."""
+    manager = _get_gesture_manager()
+    return {"status": "success", **manager.capability_matrix()}
+
+
+@app.websocket("/ws/gesture")
+async def gesture_websocket(websocket: WebSocket):
+    """Real-time gesture event + frame WebSocket stream."""
+    await websocket.accept()
+    manager = _get_gesture_manager()
+    try:
+        while True:
+            state = manager.state()
+            payload = {
+                "gesture": state.get("gesture"),
+                "confidence": state.get("confidence"),
+                "hand_count": state.get("hand_count"),
+                "active": state.get("active"),
+                "pointer_x": state.get("pointer_x"),
+                "pointer_y": state.get("pointer_y"),
+                "pinch_distance": state.get("pinch_distance"),
+                "frame": manager.current_frame_base64(),
+                "timestamp": state.get("timestamp"),
+            }
+            await websocket.send_json(payload)
+            await asyncio.sleep(0.066)  # ~15 fps
+    except WebSocketDisconnect:
+        logger.info("Gesture WebSocket disconnected")
+    except Exception as exc:
+        logger.warning(f"Gesture WebSocket error: {exc}")
+        await websocket.close(code=1011)
+
+
+# ── System Control Endpoints ─────────────────────────────────────────────────
+
+
+@app.get("/api/system/audio")
+async def system_audio_get(user=Depends(verify_token)):
+    """Return system audio status."""
+    manager = _get_system_manager()
+    return manager.get_volume()
+
+
+@app.post("/api/system/audio")
+async def system_audio_set(body: SystemVolumeRequest, user=Depends(verify_token)):
+    """Set system audio volume."""
+    manager = _get_system_manager()
+    result = manager.set_volume(body.level)
+    _audit_action(user, "system_volume_change", {"level": body.level})
+    return result
+
+
+@app.post("/api/system/audio/mute")
+async def system_audio_mute(user=Depends(verify_token)):
+    """Toggle system mute."""
+    manager = _get_system_manager()
+    result = manager.toggle_mute()
+    _audit_action(user, "system_mute_toggle", {"muted": result.get("muted")})
+    return result
+
+
+@app.get("/api/system/display")
+async def system_display_get(user=Depends(verify_token)):
+    """Return system brightness status."""
+    manager = _get_system_manager()
+    return manager.get_brightness()
+
+
+@app.post("/api/system/display")
+async def system_display_set(body: SystemBrightnessRequest, user=Depends(verify_token)):
+    """Set system brightness."""
+    manager = _get_system_manager()
+    result = manager.set_brightness(body.level)
+    _audit_action(user, "system_brightness_change", {"level": body.level})
+    return result
+
+
+@app.get("/api/system/power")
+async def system_power_get(user=Depends(verify_token)):
+    """Return system power and battery status."""
+    manager = _get_system_manager()
+    return manager.get_power_status()
+
+
+@app.get("/api/system/hardware")
+async def system_hardware_get(user=Depends(verify_token)):
+    """Return real-time hardware load (CPU/RAM/Disk)."""
+    manager = _get_system_manager()
+    return {"status": "success", "metrics": manager.get_system_load()}
+
+
+@app.get("/api/system/capabilities")
+async def system_capabilities(user=Depends(verify_token)):
+    """Return what the system OS allows JARVIS to control."""
+    manager = _get_system_manager()
+    return {"status": "success", **manager.capability_matrix()}
+
+
+# ── Intelligence (Phase 11) ────────────────────────────────────────────────
+@app.get("/api/intelligence/insights")
+async def get_insights(user=Depends(verify_token)):
+    service = _get_proactive_service()
+    return {"status": "success", "insights": service.get_insights()}
+
+@app.get("/api/intelligence/memory")
+async def search_memory(q: str, user=Depends(verify_token)):
+    engine = _get_memory_engine()
+    return {"status": "success", "results": engine.retrieve_context(q)}
+
+@app.post("/api/intelligence/memory")
+async def add_memory(req: MemoryEntry, user=Depends(verify_token)):
+    engine = _get_memory_engine()
+    entry = engine.add_episodic_memory(req.user, req.assistant, req.tags)
+    _audit_action(user, "memory_add", {"id": entry["id"]})
+    return {"status": "success", "entry": entry}
 
 
 if __name__ == "__main__":
