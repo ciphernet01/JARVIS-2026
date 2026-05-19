@@ -1,0 +1,22 @@
+---
+componentName:  jarvis
+
+strings:
+    productName:         JARVIS Neural OS
+    shortProductName:    JARVIS
+    version:             2.5.0
+    shortVersion:        2.5
+    bootloaderEntryName: JARVIS
+    productUrl:          https://sypherindustries.com/jarvis
+    supportUrl:          https://sypherindustries.com/support
+
+images:
+    productLogo:         "logo.png"
+    productIcon:         "logo.png"
+    productWelcome:      "welcome.png"
+
+style:
+   sidebarBackground:    "#020617"
+   sidebarText:          "#67e8f9"
+   sidebarTextSelect:    "#22d3ee"
+   sidebarTextHighlight: "#06b6d4"

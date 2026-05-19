@@ -10,11 +10,16 @@ logger = logging.getLogger(__name__)
 
 pyautogui = None
 try:
-    import pyautogui as _pyautogui
-    pyautogui = _pyautogui
-    PYAUTOGUI_AVAILABLE = True
-    # Fail-safe to prevent runaway automation
-    pyautogui.FAILSAFE = True
+    import os
+    if 'DISPLAY' in os.environ:
+        import pyautogui as _pyautogui
+        pyautogui = _pyautogui
+        PYAUTOGUI_AVAILABLE = True
+        # Fail-safe to prevent runaway automation
+        pyautogui.FAILSAFE = True
+    else:
+        PYAUTOGUI_AVAILABLE = False
+        logger.warning("No DISPLAY found, pyautogui disabled in os_control")
 except ImportError:
     PYAUTOGUI_AVAILABLE = False
     logger.warning("pyautogui is not installed. OS control features will be limited.")

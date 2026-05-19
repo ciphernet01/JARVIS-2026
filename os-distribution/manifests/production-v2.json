@@ -1,0 +1,23 @@
+{
+  "version": "2.5.0-final",
+  "codename": "STARK-LINK-V2",
+  "build_date": "2026-05-19",
+  "architecture": "amd64",
+  "features": [
+    "Neural Shell HUD (Electron/React)",
+    "Local AI Stack (Whisper/Ollama/Llama 3.1)",
+    "Always-Listening Wake Word (Hey JARVIS)",
+    "Spatial Computing Bridge (MediaPipe)",
+    "Multi-User Biometric Login (Face ID)",
+    "Neural Macro Architect",
+    "Neural Key Fallback Authorization",
+    "Branded Calamares & Plymouth Experience"
+  ],
+  "drivers": [
+    "open-vm-tools-desktop",
+    "xserver-xorg-video-intel",
+    "xserver-xorg-video-amdgpu",
+    "mesa-dri-accelerated"
+  ],
+  "status": "Ready for VMWare Deployment"
+}

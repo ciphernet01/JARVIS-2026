@@ -8,8 +8,13 @@ import threading
 from typing import Dict, Any, Optional
 
 try:
-    import pyautogui
-    PYAUTOGUI_AVAILABLE = True
+    import os
+    if 'DISPLAY' in os.environ:
+        import pyautogui
+        PYAUTOGUI_AVAILABLE = True
+    else:
+        PYAUTOGUI_AVAILABLE = False
+        logging.getLogger(__name__).warning("No DISPLAY found, pyautogui disabled")
 except ImportError:
     PYAUTOGUI_AVAILABLE = False
 
