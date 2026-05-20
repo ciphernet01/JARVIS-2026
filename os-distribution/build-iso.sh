@@ -51,6 +51,76 @@ check_requirements() {
     return 0
 }
 
+build_frontend_assets() {
+    log_info "Building frontend production assets..."
+
+    if ! command -v npm &> /dev/null; then
+        log_error "npm not found; install Node.js/npm before building the final ISO"
+        return 1
+    fi
+
+    if [ ! -f "$JARVIS_HOME/frontend/package-lock.json" ]; then
+        log_error "frontend/package-lock.json not found"
+        return 1
+    fi
+
+    pushd "$JARVIS_HOME/frontend" > /dev/null
+    npm ci
+    REACT_APP_BACKEND_URL="http://localhost:8001" npm run build
+    popd > /dev/null
+
+    if [ ! -f "$JARVIS_HOME/frontend/build/index.html" ]; then
+        log_error "Frontend build did not produce frontend/build/index.html"
+        return 1
+    fi
+
+    log_success "Frontend assets built"
+    return 0
+}
+
+preflight_payload() {
+    log_info "Running ISO payload preflight checks..."
+
+    local payload="$BUILD_DIR/config/includes.chroot/opt/jarvis"
+    local blocked=0
+
+    for required in \
+        "$payload/backend/server.py" \
+        "$payload/frontend/build/index.html" \
+        "$payload/os-distribution/jarvis-shell-session.sh" \
+        "$payload/os-distribution/config/jarvis.service"; do
+        if [ ! -f "$required" ]; then
+            log_error "Missing required payload file: ${required#$payload/}"
+            blocked=$((blocked + 1))
+        fi
+    done
+
+    for forbidden in \
+        "$payload/.git" \
+        "$payload/.venv" \
+        "$payload/.env" \
+        "$payload/.session_token" \
+        "$payload/frontend/node_modules" \
+        "$payload/desktop-overlay/node_modules" \
+        "$payload/memory" \
+        "$payload/backups" \
+        "$payload/test_reports" \
+        "$payload/jarvis.db"; do
+        if [ -e "$forbidden" ]; then
+            log_error "Forbidden payload artifact included: ${forbidden#$payload/}"
+            blocked=$((blocked + 1))
+        fi
+    done
+
+    if [ $blocked -gt 0 ]; then
+        log_error "Payload preflight failed with $blocked issue(s)"
+        return 1
+    fi
+
+    log_success "Payload preflight passed"
+    return 0
+}
+
 prepare_environment() {
     log_info "Preparing build environment..."
     
@@ -72,9 +142,29 @@ prepare_environment() {
     
     # Copy JARVIS code directly into the live filesystem payload.
     tar -C "$JARVIS_HOME" \
+        --exclude ".git" \
+        --exclude ".pytest_cache" \
+        --exclude ".tmp" \
+        --exclude ".testtmp" \
+        --exclude ".venv" \
+        --exclude ".env" \
+        --exclude ".env.*" \
+        --exclude ".session_token" \
+        --exclude "__pycache__" \
+        --exclude "*.pyc" \
+        --exclude "*.log" \
+        --exclude "*.db" \
+        --exclude "backups" \
+        --exclude "captures" \
+        --exclude "frontend/node_modules" \
+        --exclude "desktop-overlay/node_modules" \
+        --exclude "memory" \
         --exclude "os-distribution/build" \
         --exclude "os-distribution/output" \
+        --exclude "test_reports" \
         -cf - . | tar -C "$BUILD_DIR/config/includes.chroot/opt/jarvis" -xf -
+
+    preflight_payload || return 1
     
     log_success "Build environment prepared"
 }
@@ -157,6 +247,12 @@ if [ -f "$JARVIS_INSTALL_DIR/os-distribution/jarvis-shell" ]; then
     echo "Voice shell installed"
 fi
 
+if [ -f "$JARVIS_INSTALL_DIR/os-distribution/jarvis-shell-session.sh" ]; then
+    chmod +x "$JARVIS_INSTALL_DIR/os-distribution/jarvis-shell-session.sh"
+    ln -sf "$JARVIS_INSTALL_DIR/os-distribution/jarvis-shell-session.sh" /usr/local/bin/jarvis-shell-session
+    echo "Graphical shell session installed"
+fi
+
 # First-boot setup
 if [ -f "$JARVIS_INSTALL_DIR/os-distribution/first-boot-setup.sh" ]; then
     chmod +x "$JARVIS_INSTALL_DIR/os-distribution/first-boot-setup.sh"
@@ -213,6 +309,7 @@ main() {
     
     # Run build steps
     check_requirements || exit 1
+    build_frontend_assets || exit 1
     prepare_environment || exit 1
     configure_live_build || exit 1
     add_packages || exit 1

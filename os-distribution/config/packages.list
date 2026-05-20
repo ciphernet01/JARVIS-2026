@@ -92,7 +92,7 @@ ffmpeg
 libportaudio2
 
 # Web Server/Browser
-firefox
+firefox-esr
 nginx
 
 # Development Tools
