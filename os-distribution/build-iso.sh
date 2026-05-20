@@ -62,14 +62,19 @@ prepare_environment() {
     
     # Create directories
     mkdir -p "$BUILD_DIR/config"
+    mkdir -p "$BUILD_DIR/config/package-lists"
+    mkdir -p "$BUILD_DIR/config/includes.chroot/opt/jarvis"
     mkdir -p "$OUTPUT_DIR"
     
     # Copy configuration
     cp "$CONFIG_DIR/live-build.conf" "$BUILD_DIR/config/"
     cp "$CONFIG_DIR/packages.list" "$BUILD_DIR/"
     
-    # Copy JARVIS code
-    cp -r "$JARVIS_HOME" "$BUILD_DIR/jarvis-code"
+    # Copy JARVIS code directly into the live filesystem payload.
+    tar -C "$JARVIS_HOME" \
+        --exclude "os-distribution/build" \
+        --exclude "os-distribution/output" \
+        -cf - . | tar -C "$BUILD_DIR/config/includes.chroot/opt/jarvis" -xf -
     
     log_success "Build environment prepared"
 }
@@ -81,18 +86,26 @@ configure_live_build() {
     
     # Initialize live-build config
     lb config \
+        --ignore-system-defaults \
+        --mode debian \
         --architectures amd64 \
-        --binary-format iso-hybrid \
+        --binary-images iso-hybrid \
         --bootloader grub-efi \
         --archive-areas "main contrib non-free non-free-firmware" \
         --debian-installer live \
         --distribution bookworm \
+        --keyring-packages "debian-archive-keyring" \
+        --mirror-bootstrap "https://deb.debian.org/debian" \
+        --mirror-chroot "https://deb.debian.org/debian" \
+        --mirror-binary "https://deb.debian.org/debian" \
+        --mirror-chroot-security "https://security.debian.org/debian-security" \
+        --mirror-binary-security "https://security.debian.org/debian-security" \
         --firmware-binary true \
         --firmware-chroot true \
         --iso-application "JARVIS Neural OS" \
         --iso-volume "JARVIS_OS" \
         --linux-flavours generic \
-        --security true
+        --security false
     
     log_success "Live-build configured"
 }
@@ -127,11 +140,7 @@ set -e
 JARVIS_INSTALL_DIR="/opt/jarvis"
 mkdir -p "$JARVIS_INSTALL_DIR"
 
-# Copy JARVIS code to image
-if [ -d /tmp/jarvis-code ]; then
-    cp -r /tmp/jarvis-code/* "$JARVIS_INSTALL_DIR/"
-    log_success "JARVIS installed to $JARVIS_INSTALL_DIR"
-fi
+echo "JARVIS payload staged at $JARVIS_INSTALL_DIR"
 
 # Install systemd service
 if [ -f "$JARVIS_INSTALL_DIR/os-distribution/config/jarvis.service" ]; then
