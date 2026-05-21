@@ -1,6 +1,6 @@
 """
-JARVIS Neural Interface - FastAPI Backend
-Advanced AI Assistant with Gemini integration
+A.S.T.R.A OS - FastAPI Backend
+Agentic Spatial Task Reasoning Architecture runtime API.
 """
 
 import os
@@ -74,7 +74,7 @@ face_cascade = cv2.CascadeClassifier(FACE_CASCADE_PATH)
 FACE_COLLECTION = "enrolled_faces"
 MACRO_COLLECTION = "neural_macros"
 
-app = FastAPI(title="JARVIS Neural Interface API", version="2.0")
+app = FastAPI(title="A.S.T.R.A OS API", version="2026.05")
 
 app.add_middleware(
     CORSMiddleware,
@@ -1446,8 +1446,8 @@ async def jarvis_code_assist(prompt: str, repo_context: str = None, language: st
 async def health_check():
     return {
         "status": "online",
-        "system": "JARVIS Neural Interface",
-        "version": "2.0",
+        "system": "A.S.T.R.A OS",
+        "version": "2026.05",
         "uptime_seconds": int((datetime.now(timezone.utc) - APP_START_TIME).total_seconds()),
         "timestamp": datetime.now(timezone.utc).isoformat(),
     }

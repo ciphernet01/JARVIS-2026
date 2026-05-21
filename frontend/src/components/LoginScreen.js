@@ -178,7 +178,7 @@ export default function LoginScreen({ onLogin, api }) {
       </div>
 
       <div className="absolute top-4 left-4 right-4 flex items-center justify-between z-20 font-mono text-[9px] tracking-[0.2em] uppercase text-cyan-300/40">
-        <span>Sypher Industries // J.A.R.V.I.S OS</span>
+        <span>Sypher Industries // A.S.T.R.A OS</span>
         <span>Voice-first shell active</span>
       </div>
 
@@ -197,10 +197,10 @@ export default function LoginScreen({ onLogin, api }) {
 
         {/* Title */}
         <h1 className="font-display text-4xl tracking-tighter uppercase text-cyan-400 mb-1" style={{ textShadow: '0 0 20px rgba(6,182,212,0.5)' }}>
-          J.A.R.V.I.S OS
+          A.S.T.R.A OS
         </h1>
         <p className="font-display text-xs tracking-[0.2em] uppercase text-cyan-300/60 mb-6">
-          Sypher Industries // Debian Shell Interface
+          Agentic Spatial Task Reasoning Architecture
         </p>
 
         {/* Camera Feed - Large and visible */}

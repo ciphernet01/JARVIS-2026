@@ -165,7 +165,7 @@ export default function Dashboard({ token, api, onLogout, initialPanel = 'contro
         <div className="absolute top-0 left-0 right-0 h-8 z-[1000] flex items-center justify-between px-4 bg-slate-950/90 border-b border-cyan-900/30" 
              style={{ WebkitAppRegion: 'drag' }}>
           <div className="text-[10px] text-cyan-500/50 tracking-[0.2em] font-bold">
-            JARVIS // NEURAL SHELL v2.5
+            A.S.T.R.A // SPATIAL SHELL v2026.05
           </div>
           <div className="flex gap-2" style={{ WebkitAppRegion: 'no-drag' }}>
             <button 
@@ -189,10 +189,10 @@ export default function Dashboard({ token, api, onLogout, initialPanel = 'contro
       <header className="flex items-center justify-between px-6 py-3 border-b border-cyan-900/50 bg-slate-950/80 backdrop-blur-xl z-40" data-testid="top-bar">
         <div className="flex items-center gap-4">
           <h1 className="font-display text-lg tracking-tighter uppercase text-cyan-400" style={{ textShadow: '0 0 10px rgba(6,182,212,0.4)' }}>
-            J.A.R.V.I.S
+            A.S.T.R.A
           </h1>
           <span className="w-px h-5 bg-cyan-500/40" />
-          <span className="font-display text-[10px] tracking-[0.2em] uppercase text-cyan-300/50">Sypher Industries // Neural Interface v2.0</span>
+          <span className="font-display text-[10px] tracking-[0.2em] uppercase text-cyan-300/50">Agentic Spatial Task Reasoning Architecture</span>
         </div>
         <div className="flex items-center gap-4">
           {fetchError && (

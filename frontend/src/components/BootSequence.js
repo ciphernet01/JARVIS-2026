@@ -9,7 +9,7 @@ const DEFAULT_STEPS = [
   'Mapping System Modules',
   'Verifying Diagnostics',
   'Bootstrapping Command Matrix',
-  'Activating JARVIS Shell',
+  'Activating A.S.T.R.A Shell',
 ];
 
 export default function BootSequence({ onComplete, durationMs = 3200 }) {
@@ -45,8 +45,8 @@ export default function BootSequence({ onComplete, durationMs = 3200 }) {
       <div className="boot-scan" />
       <div className="boot-shell">
         <div className="boot-header">
-          <span className="boot-title">JARVIS BIOS</span>
-          <span className="boot-subtitle">Neural Interface v4.0</span>
+          <span className="boot-title">A.S.T.R.A BIOS</span>
+          <span className="boot-subtitle">Spatial Interface v2026.05</span>
         </div>
         <div className="boot-grid">
           <div className="boot-left">

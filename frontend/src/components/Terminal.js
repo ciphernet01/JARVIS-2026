@@ -3,7 +3,7 @@ import { Send, Mic, MicOff, Volume2, VolumeX } from 'lucide-react';
 
 export default function Terminal({ api, token }) {
   const [messages, setMessages] = useState([
-    { type: 'system', text: 'JARVIS Neural Interface Online. All systems nominal.' },
+    { type: 'system', text: 'A.S.T.R.A Spatial Interface online. All systems nominal.' },
     { type: 'system', text: 'Awaiting commands, Sir.' },
   ]);
   const [input, setInput] = useState('');

@@ -11,20 +11,18 @@ A.S.T.R.A uses one active web setup:
 
 Run the backend:
 
-```powershell
+```bash
+./scripts/start_astra.sh
+```
+
+Manual backend command:
+
+```bash
 cd backend
-uvicorn server:app --host 0.0.0.0 --port 8001
+../.venv-linux/bin/uvicorn server:app --host 127.0.0.1 --port 8001
 ```
 
-Run the frontend:
-
-```powershell
-cd frontend
-$env:REACT_APP_BACKEND_URL="http://localhost:8001"
-npm start
-```
-
-The older Flask/static dashboard files are legacy only. Use the React/FastAPI stack above for active development.
+The startup script runs the FastAPI backend on `http://127.0.0.1:8001` and the React interface on `http://localhost:3000`. The older Flask/static dashboard files are legacy only. Use the React/FastAPI stack above for active development.
 
 ## Overview
 
