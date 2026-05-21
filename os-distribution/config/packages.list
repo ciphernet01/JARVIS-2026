@@ -36,7 +36,7 @@ wget
 # Audio System (JARVIS Voice I/O)
 alsa-utils
 pulseaudio
-pulseaudio-alsa
+# pulseaudio-alsa removed: not available in Debian bookworm; keep alsa-utils + pulseaudio
 pavucontrol
 pipewire
 pipewire-audio-client-libraries
@@ -133,4 +133,5 @@ file
 less
 grep
 sed
-awk
+# Use mawk instead of virtual 'awk' package to ensure installation candidate
+mawk

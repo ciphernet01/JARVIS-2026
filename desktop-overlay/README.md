@@ -1,6 +1,6 @@
-# JARVIS Desktop Overlay
+# A.S.T.R.A Desktop Overlay
 
-This is a desktop shell for the existing JARVIS React UI.
+This is a desktop shell for the existing A.S.T.R.A React UI.
 
 ## Behavior
 - Loads the same web UI without changing the interface markup or styling.

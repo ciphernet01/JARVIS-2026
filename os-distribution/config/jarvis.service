@@ -1,6 +1,6 @@
 [Unit]
-Description=JARVIS Neural Operating System Core
-Documentation=https://jarvis.ai/docs
+Description=A.S.T.R.A Operating System Core
+Documentation=https://astra.local/docs
 After=network-online.target sound.target
 Wants=network-online.target
 

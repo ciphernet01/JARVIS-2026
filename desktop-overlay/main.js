@@ -64,7 +64,7 @@ function createWindow() {
     minWidth: workAreaSize.width,
     minHeight: workAreaSize.height,
     backgroundColor: '#00000000',
-    title: 'JARVIS Overlay',
+    title: 'A.S.T.R.A Overlay',
     show: false,
     frame: false,
     titleBarStyle: 'hidden',
@@ -121,7 +121,7 @@ function createTray() {
   tray = new Tray(fs.existsSync(iconPath) ? iconPath : path.join(__dirname, 'package.json')); 
   
   const contextMenu = Menu.buildFromTemplate([
-    { label: 'JARVIS OS', enabled: false },
+    { label: 'A.S.T.R.A OS', enabled: false },
     { type: 'separator' },
     { label: 'Show Dashboard', click: () => { mainWindow.show(); mainWindow.focus(); } },
     { label: 'Hide Dashboard', click: () => { mainWindow.hide(); } },
@@ -129,10 +129,10 @@ function createTray() {
     { label: 'Always on Top', type: 'checkbox', checked: true, click: (item) => { mainWindow.setAlwaysOnTop(item.checked); } },
     { label: 'Click Through', type: 'checkbox', checked: false, click: (item) => { mainWindow.setIgnoreMouseEvents(item.checked); } },
     { type: 'separator' },
-    { label: 'Quit JARVIS', click: () => { app.isQuitting = true; app.quit(); } }
+    { label: 'Quit A.S.T.R.A', click: () => { app.isQuitting = true; app.quit(); } }
   ]);
 
-  tray.setToolTip('JARVIS Neural Interface');
+  tray.setToolTip('A.S.T.R.A Spatial Interface');
   tray.setContextMenu(contextMenu);
   
   tray.on('double-click', () => {
@@ -164,7 +164,7 @@ app.whenReady().then(async () => {
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {
       boot().catch((error) => {
-        console.error('Failed to reopen JARVIS overlay:', error);
+        console.error('Failed to reopen A.S.T.R.A overlay:', error);
       });
     }
   });

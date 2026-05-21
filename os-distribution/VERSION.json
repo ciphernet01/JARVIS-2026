@@ -1,8 +1,9 @@
 {
-  "name": "JARVIS OS",
-  "version": "2026.05.17-rc.1",
+  "name": "A.S.T.R.A OS",
+  "full_name": "Agentic Spatial Task Reasoning Architecture",
+  "version": "2026.05.21-rc.1",
   "channel": "release-candidate",
-  "phase": "7",
-  "codename": "production-handoff",
+  "phase": "production-iso-readiness",
+  "codename": "astra-handoff",
   "minimum_evidence_status": "ready_with_warnings"
 }

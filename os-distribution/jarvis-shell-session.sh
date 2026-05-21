@@ -1,8 +1,8 @@
 #!/bin/bash
 set -e
 
-# JARVIS OS - Neural Shell Session Wrapper
-# Starts the X server and launches the local JARVIS UI.
+# A.S.T.R.A OS - Spatial Shell Session Wrapper
+# Starts the X server and launches the local A.S.T.R.A UI.
 
 JARVIS_HOME="${JARVIS_HOME:-/opt/jarvis}"
 BACKEND_URL="http://localhost:${JARVIS_BACKEND_PORT:-8001}"
@@ -35,7 +35,7 @@ xset s off || true
 xset -dpms || true
 xset s noblank || true
 
-# 4. Start JARVIS Backend
+# 4. Start A.S.T.R.A backend
 cd "$JARVIS_HOME"
 python3 backend/server.py &
 BACKEND_PID=$!
@@ -60,5 +60,5 @@ elif command -v firefox-esr > /dev/null || command -v firefox > /dev/null; then
         "$FIREFOX_BIN" --kiosk "$BACKEND_URL/docs"
     fi
 else
-    xterm -hold -e "echo 'JARVIS backend is running at $BACKEND_URL'; journalctl -u jarvis.service -f"
+    xterm -hold -e "echo 'A.S.T.R.A backend is running at $BACKEND_URL'; journalctl -u jarvis.service -f"
 fi

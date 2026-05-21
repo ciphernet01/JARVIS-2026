@@ -27,7 +27,16 @@ except ImportError:
 try:
     import screen_brightness_control as sbc
 except ImportError:
-    sbc = None
+    import types
+    # Provide a lightweight shim so tests can patch `sbc.get_brightness` even when
+    # the real `screen_brightness_control` package is unavailable on CI/Linux.
+    sbc = types.SimpleNamespace()
+    def _sbc_get_brightness():
+        return [100]
+    def _sbc_set_brightness(level:int):
+        return None
+    sbc.get_brightness = _sbc_get_brightness
+    sbc.set_brightness = _sbc_set_brightness
 
 
 class SystemManager:

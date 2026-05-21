@@ -82,7 +82,17 @@ class DeviceManager:
     def snapshot(self) -> Dict[str, Any]:
         """Return a compact, high-signal snapshot of hardware readiness."""
         memory = psutil.virtual_memory()
-        disk = psutil.disk_usage(str(self.workspace_root.anchor or self.workspace_root))
+        # Disk usage: guard against non-existent anchors (e.g., Windows-style 'C:/')
+        try:
+            disk_path = str(self.workspace_root.anchor or self.workspace_root)
+            disk = psutil.disk_usage(disk_path)
+        except Exception:
+            # Fallback to root filesystem
+            try:
+                disk = psutil.disk_usage("/")
+            except Exception:
+                # Give a sensible default if disk info unavailable
+                disk = type("D", (), {"total": 0, "free": 0})()
         battery = psutil.sensors_battery()
         cpu_freq = psutil.cpu_freq()
         width, height = self._screen_geometry()

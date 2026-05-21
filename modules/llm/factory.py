@@ -42,8 +42,11 @@ def create_llm_manager(config: Any = None) -> Any:
         router_cls = router_cls or router_module.CompositeLLMManager
         ollama_cls = ollama_module.OllamaManager
 
-    # Prefer Ollama for "Market Ready" zero-delay feel
-    primary = ollama_cls(
+    # Decide primary based on configured provider and availability
+    provider_pref = getattr(llm_cfg, "provider", None)
+
+    # Construct candidates
+    ollama_inst = ollama_cls(
         model=getattr(llm_cfg, "model", "llama3.1"),
         temperature=getattr(llm_cfg, "temperature", 0.2),
         top_p=getattr(llm_cfg, "top_p", 0.9),
@@ -51,15 +54,28 @@ def create_llm_manager(config: Any = None) -> Any:
         system_prompt=getattr(llm_cfg, "system_prompt", None),
     )
 
-    fallback = gemini_cls(
+    gemini_inst = gemini_cls(
         api_key=gemini_api_key,
-        model="gemini-2.5-flash",
+        model=getattr(llm_cfg, "model", "gemini-2.5-flash"),
         temperature=getattr(llm_cfg, "temperature", 0.2),
         top_p=getattr(llm_cfg, "top_p", 0.9),
         timeout_seconds=getattr(llm_cfg, "timeout_seconds", 60),
         system_prompt=getattr(llm_cfg, "system_prompt", None),
     )
 
+    primary = ollama_inst
+    fallback = gemini_inst
+
+    if provider_pref == "gemini":
+        try:
+            if getattr(gemini_inst, "is_available", lambda: False)():
+                primary = gemini_inst
+                # When provider is explicitly Gemini and it's available, do not set a fallback
+                fallback = None
+        except Exception:
+            # If availability check fails, fall back to defaults
+            primary = ollama_inst
+
     router = router_cls(primary=primary, fallback=fallback)
-    logger.info("LLM router initialized with Ollama primary and Gemini fallback")
+    logger.info("LLM router initialized with primary=%s", type(primary).__name__)
     return router

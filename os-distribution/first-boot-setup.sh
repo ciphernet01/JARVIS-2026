@@ -1,6 +1,6 @@
 #!/bin/bash
-# JARVIS First-Boot Setup Wizard
-# Runs on first system boot to configure JARVIS OS
+# A.S.T.R.A First-Boot Setup Wizard
+# Runs on first system boot to configure A.S.T.R.A OS.
 
 set -e
 
@@ -36,7 +36,7 @@ main() {
     
     echo -e "${BLUE}"
     echo "╔════════════════════════════════════════════════════╗"
-    echo "║    JARVIS Neural Operating System                 ║"
+    echo "║    A.S.T.R.A Operating System                     ║"
     echo "║    First-Boot Setup & Configuration               ║"
     echo "╚════════════════════════════════════════════════════╝"
     echo -e "${NC}"
@@ -48,7 +48,7 @@ main() {
     log_success "System packages updated"
     
     # 2. Create directories
-    log_info "Creating JARVIS directories..."
+    log_info "Creating A.S.T.R.A directories..."
     mkdir -p "$JARVIS_CONFIG_DIR"
     mkdir -p "$JARVIS_DATA_DIR"
     mkdir -p /var/log/jarvis
@@ -68,7 +68,7 @@ main() {
     log_success "Dependencies installed (including AI/Vision/HUD layers)"
     
     # 4. Database initialization
-    log_info "Initializing JARVIS database..."
+    log_info "Initializing A.S.T.R.A database..."
     mkdir -p "$JARVIS_DATA_DIR"
     log_success "Database directory ready"
     
@@ -111,17 +111,17 @@ main() {
         log_success "User $USERNAME created"
     fi
     
-    # 9. JARVIS service setup
-    log_info "Setting up JARVIS service..."
+    # 9. A.S.T.R.A service setup
+    log_info "Setting up A.S.T.R.A service..."
     cp "$JARVIS_HOME/os-distribution/config/jarvis.service" /etc/systemd/system/
     systemctl daemon-reload
     systemctl enable jarvis.service
-    log_success "JARVIS service installed"
+    log_success "A.S.T.R.A service installed"
     
     # 10. Voice & Vision setup
     log_info "Voice & Vision system setup"
     echo -e "${YELLOW}"
-    echo "JARVIS uses voice recognition and hand gestures for interaction."
+    echo "A.S.T.R.A uses voice recognition and hand gestures for interaction."
     echo "Downloading Whisper base model for offline speech recognition..."
     # Pre-download Whisper model to avoid delay on first use
     python3 -c "import whisper; whisper.load_model('base')"
@@ -138,7 +138,7 @@ main() {
     echo -e "${BLUE}Next steps:${NC}"
     echo "1. Reboot the system: reboot"
     echo "2. Login as $USERNAME"
-    echo "3. JARVIS will start automatically"
+    echo "3. A.S.T.R.A will start automatically"
     echo "4. Access web interface: http://localhost:3000"
     echo ""
     

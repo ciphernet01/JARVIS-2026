@@ -1,6 +1,6 @@
-# JARVIS Operating System Distribution
+# A.S.T.R.A Operating System Distribution
 
-Complete bootable Debian-based OS with JARVIS AI as the core system intelligence.
+Complete bootable Debian-based OS for A.S.T.R.A, the Agentic Spatial Task Reasoning Architecture. The image still stages the inherited assistant runtime under `/opt/jarvis` for compatibility with existing service paths.
 
 ## Architecture
 
@@ -68,6 +68,8 @@ cd os-distribution
 chmod +x build-iso.sh
 ./build-iso.sh
 ```
+
+Production rollout gates are tracked in `PRODUCTION_READINESS.md`.
 
 ### Installation
 - Boot from JARVIS ISO

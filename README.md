@@ -1,8 +1,10 @@
-# JARVIS AI Assistant - Modern Modular Architecture
+# A.S.T.R.A OS - Agentic Spatial Task Reasoning Architecture
+
+A.S.T.R.A is the production OS direction for this repository: a Debian-based, bootable spatial assistant environment that builds on the existing JARVIS runtime. Internal package paths and API headers may still use `jarvis` names for compatibility while the product-facing distribution moves to A.S.T.R.A.
 
 ## Canonical Web Stack
 
-J.A.R.V.I.S uses one active web setup:
+A.S.T.R.A uses one active web setup:
 
 - Frontend: React on `http://localhost:3000`
 - Backend: FastAPI on `http://localhost:8001`

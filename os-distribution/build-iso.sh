@@ -1,14 +1,15 @@
 #!/bin/bash
-# JARVIS OS ISO Builder
-# Builds bootable Debian live-build ISO with JARVIS integrated
+# A.S.T.R.A OS ISO Builder
+# Builds bootable Debian live-build ISO with A.S.T.R.A integrated.
 
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-BUILD_DIR="$SCRIPT_DIR/build"
-OUTPUT_DIR="$SCRIPT_DIR/output"
+BUILD_DIR="${ASTRA_BUILD_DIR:-$SCRIPT_DIR/build}"
+OUTPUT_DIR="${ASTRA_OUTPUT_DIR:-$SCRIPT_DIR/output}"
 CONFIG_DIR="$SCRIPT_DIR/config"
 JARVIS_HOME="$SCRIPT_DIR/.."
+FRONTEND_BUILD_DIR="${ASTRA_FRONTEND_BUILD_DIR:-${TMPDIR:-/tmp}/astra-frontend-build}"
 
 # Colors
 RED='\033[0;31m'
@@ -64,13 +65,19 @@ build_frontend_assets() {
         return 1
     fi
 
+    mkdir -p "$OUTPUT_DIR"
     pushd "$JARVIS_HOME/frontend" > /dev/null
-    npm ci
-    REACT_APP_BACKEND_URL="http://localhost:8001" npm run build
+    if [ -d node_modules ] && [ ! -w node_modules ]; then
+        log_info "frontend/node_modules is not writable; using existing dependencies"
+    else
+        npm ci
+    fi
+    rm -rf "$FRONTEND_BUILD_DIR"
+    DISABLE_ESLINT_PLUGIN=true BUILD_PATH="$FRONTEND_BUILD_DIR" REACT_APP_BACKEND_URL="http://localhost:8001" npm run build
     popd > /dev/null
 
-    if [ ! -f "$JARVIS_HOME/frontend/build/index.html" ]; then
-        log_error "Frontend build did not produce frontend/build/index.html"
+    if [ ! -f "$FRONTEND_BUILD_DIR/index.html" ]; then
+        log_error "Frontend build did not produce $FRONTEND_BUILD_DIR/index.html"
         return 1
     fi
 
@@ -123,11 +130,23 @@ preflight_payload() {
 
 prepare_environment() {
     log_info "Preparing build environment..."
+
+    if [ -e "$BUILD_DIR" ] && [ ! -w "$BUILD_DIR" ]; then
+        log_error "Build directory is not writable: $BUILD_DIR"
+        echo "Use sudo, remove the stale build directory, or set ASTRA_BUILD_DIR to a writable path."
+        return 1
+    fi
+
+    if [ -e "$OUTPUT_DIR" ] && [ ! -w "$OUTPUT_DIR" ]; then
+        log_error "Output directory is not writable: $OUTPUT_DIR"
+        echo "Use sudo, fix ownership, or set ASTRA_OUTPUT_DIR to a writable path."
+        return 1
+    fi
     
     # Clean previous builds
     if [ -d "$BUILD_DIR" ]; then
         log_info "Cleaning previous build..."
-        rm -rf "$BUILD_DIR"
+        rm -rf "$BUILD_DIR" || return 1
     fi
     
     # Create directories
@@ -156,6 +175,7 @@ prepare_environment() {
         --exclude "*.db" \
         --exclude "backups" \
         --exclude "captures" \
+        --exclude "frontend/build" \
         --exclude "frontend/node_modules" \
         --exclude "desktop-overlay/node_modules" \
         --exclude "memory" \
@@ -163,6 +183,10 @@ prepare_environment() {
         --exclude "os-distribution/output" \
         --exclude "test_reports" \
         -cf - . | tar -C "$BUILD_DIR/config/includes.chroot/opt/jarvis" -xf -
+
+    rm -rf "$BUILD_DIR/config/includes.chroot/opt/jarvis/frontend/build"
+    mkdir -p "$BUILD_DIR/config/includes.chroot/opt/jarvis/frontend/build"
+    cp -a "$FRONTEND_BUILD_DIR/." "$BUILD_DIR/config/includes.chroot/opt/jarvis/frontend/build/"
 
     preflight_payload || return 1
     
@@ -192,8 +216,8 @@ configure_live_build() {
         --mirror-binary-security "https://security.debian.org/debian-security" \
         --firmware-binary true \
         --firmware-chroot true \
-        --iso-application "JARVIS Neural OS" \
-        --iso-volume "JARVIS_OS" \
+        --iso-application "A.S.T.R.A OS" \
+        --iso-volume "ASTRA_OS" \
         --linux-flavours generic \
         --security false
     
@@ -216,28 +240,28 @@ add_packages() {
 }
 
 add_jarvis_integration() {
-    log_info "Integrating JARVIS into image..."
+    log_info "Integrating A.S.T.R.A into image..."
     
     # Create hooks for post-build customization
     mkdir -p "$BUILD_DIR/config/hooks/normal"
     
     cat > "$BUILD_DIR/config/hooks/normal/2000-jarvis-install.hook.chroot" << 'HOOK'
 #!/bin/bash
-# Install JARVIS into image
+# Install A.S.T.R.A into image
 
 set -e
 
 JARVIS_INSTALL_DIR="/opt/jarvis"
 mkdir -p "$JARVIS_INSTALL_DIR"
 
-echo "JARVIS payload staged at $JARVIS_INSTALL_DIR"
+echo "A.S.T.R.A payload staged at $JARVIS_INSTALL_DIR"
 
 # Install systemd service
 if [ -f "$JARVIS_INSTALL_DIR/os-distribution/config/jarvis.service" ]; then
     cp "$JARVIS_INSTALL_DIR/os-distribution/config/jarvis.service" /etc/systemd/system/
     systemctl daemon-reload
     systemctl enable jarvis.service
-    echo "JARVIS service enabled"
+    echo "A.S.T.R.A service enabled"
 fi
 
 # Set up voice shell
@@ -259,12 +283,12 @@ if [ -f "$JARVIS_INSTALL_DIR/os-distribution/first-boot-setup.sh" ]; then
     ln -sf "$JARVIS_INSTALL_DIR/os-distribution/first-boot-setup.sh" /usr/local/bin/jarvis-first-boot
 fi
 
-echo "JARVIS integration complete"
+echo "A.S.T.R.A integration complete"
 HOOK
     
     chmod +x "$BUILD_DIR/config/hooks/normal/2000-jarvis-install.hook.chroot"
     
-    log_success "JARVIS integration hooks added"
+    log_success "A.S.T.R.A integration hooks added"
 }
 
 build_iso() {
@@ -276,7 +300,7 @@ build_iso() {
     sudo lb build 2>&1 | tee build.log
     
     if [ -f live-image-amd64.hybrid.iso ]; then
-        mv live-image-amd64.hybrid.iso "$OUTPUT_DIR/jarvis-os-$(date +%Y%m%d).iso"
+        mv live-image-amd64.hybrid.iso "$OUTPUT_DIR/astra-os-$(date +%Y%m%d).iso"
         log_success "ISO image created"
         return 0
     else
@@ -301,8 +325,8 @@ create_checksums() {
 main() {
     echo -e "${BLUE}"
     echo "╔════════════════════════════════════════════════════╗"
-    echo "║    JARVIS OS ISO Builder                           ║"
-    echo "║    Building Bootable Neural Operating System      ║"
+    echo "║    A.S.T.R.A OS ISO Builder                        ║"
+    echo "║    Agentic Spatial Task Reasoning Architecture     ║"
     echo "╚════════════════════════════════════════════════════╝"
     echo -e "${NC}"
     echo ""

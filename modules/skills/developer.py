@@ -20,7 +20,13 @@ def _workspace_root() -> Path:
 
 def _workspace_path(filename: str) -> Path:
     root = _workspace_root()
-    target = (root / filename).resolve()
+    # Normalize Windows-style separators so tests using backslashes are handled
+    filename_norm = filename.replace("\\", os.sep)
+    filename_norm = os.path.normpath(filename_norm)
+    # Reject any parent-traversal segments to prevent workspace escape
+    if any(part == ".." for part in Path(filename_norm).parts):
+        raise PermissionError("File operation escapes the workspace boundary")
+    target = (root / filename_norm).resolve()
     try:
         target.relative_to(root)
     except ValueError as exc:

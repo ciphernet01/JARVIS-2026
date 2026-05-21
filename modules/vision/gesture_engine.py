@@ -17,6 +17,10 @@ try:
 except (ImportError, AttributeError):
     TASKS_AVAILABLE = False
 
+# Backwards-compat shims for tests that patch legacy mediapipe symbols
+mp_hands = None
+mp_drawing = None
+
 logger = logging.getLogger(__name__)
 
 from dataclasses import dataclass, field
@@ -61,7 +65,7 @@ RING_MCP, RING_PIP, RING_DIP, RING_TIP = 13, 14, 15, 16
 PINKY_MCP, PINKY_PIP, PINKY_DIP, PINKY_TIP = 17, 18, 19, 20
 
 class GestureEngine:
-    def __init__(self, max_hands=2, detection_confidence=0.5, tracking_confidence=0.5, **kwargs):
+    def __init__(self, max_hands=2, detection_confidence=0.7, tracking_confidence=0.5, **kwargs):
         self.max_hands = max_hands
         self.detection_confidence = detection_confidence
         self.tracking_confidence = tracking_confidence

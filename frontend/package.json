@@ -1,6 +1,6 @@
 {
-  "name": "jarvis-neural-interface",
-  "version": "2.0.0",
+  "name": "astra-spatial-interface",
+  "version": "2026.5.21",
   "private": true,
   "proxy": "http://localhost:8001",
   "dependencies": {
