@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { AlertTriangle, CheckCircle2, DatabaseBackup, RefreshCw, ShieldCheck, Terminal } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, DatabaseBackup, Play, RefreshCw, ShieldCheck, Terminal } from 'lucide-react';
 
 async function readResponse(resp) {
   const text = await resp.text();
@@ -15,6 +15,7 @@ export default function OnboardingScreen({ api, token, onComplete, onOpenSetting
   const [readiness, setReadiness] = useState(null);
   const [loading, setLoading] = useState(true);
   const [actionBusy, setActionBusy] = useState(false);
+  const [gateBusy, setGateBusy] = useState(null);
   const [message, setMessage] = useState(null);
 
   const fetchReadiness = useCallback(async () => {
@@ -74,6 +75,69 @@ export default function OnboardingScreen({ api, token, onComplete, onOpenSetting
       setMessage({ success: false, text: `Checkpoint failed: ${error.message}` });
     } finally {
       setActionBusy(false);
+    }
+  };
+
+  const gateActions = {
+    hardware_validation: {
+      label: 'Run Validation',
+      endpoint: '/api/os/hardware/validate',
+      body: { label: 'first-run-hardware-validation', notes: 'Captured from A.S.T.R.A first-run readiness.', save: true },
+      resultKey: 'report',
+      statusKey: 'overall_status',
+    },
+    security_audit: {
+      label: 'Run Audit',
+      endpoint: '/api/os/security/audit',
+      body: { save: true },
+      resultKey: 'report',
+      statusKey: 'overall_status',
+    },
+    performance_baseline: {
+      label: 'Run Baseline',
+      endpoint: '/api/os/performance/baseline',
+      body: { label: 'first-run-performance-baseline', notes: 'Captured from A.S.T.R.A first-run readiness.', duration_seconds: 5, interval_seconds: 1, save: true },
+      resultKey: 'report',
+      statusKey: 'overall_status',
+    },
+    failover_drill: {
+      label: 'Run Drill',
+      endpoint: '/api/os/failover/drill',
+      body: { label: 'first-run-failover-drill', notes: 'Captured from A.S.T.R.A first-run readiness.', save: true },
+      resultKey: 'report',
+      statusKey: 'overall_status',
+    },
+    release_evidence: {
+      label: 'Create Bundle',
+      endpoint: '/api/os/release/evidence',
+      body: { label: 'first-run-release-evidence', notes: 'Captured from A.S.T.R.A first-run readiness.', save: true },
+      resultKey: 'bundle',
+      statusKey: 'release_status',
+    },
+  };
+
+  const runGateAction = async (key) => {
+    const action = gateActions[key];
+    if (!action) return;
+    setGateBusy(key);
+    setMessage(null);
+    try {
+      const resp = await fetch(`${api}${action.endpoint}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-JARVIS-TOKEN': token },
+        body: JSON.stringify(action.body),
+      });
+      const data = await readResponse(resp);
+      if (!resp.ok) throw new Error(data.detail || data.message || `${action.label} failed`);
+      const result = data[action.resultKey] || {};
+      const status = result[action.statusKey] || 'complete';
+      const score = typeof result.score === 'number' ? ` / score ${Math.round(result.score * 100)}%` : '';
+      setMessage({ success: status !== 'fail' && status !== 'blocked', text: `${action.label} ${status}${score}.` });
+      await fetchReadiness();
+    } catch (error) {
+      setMessage({ success: false, text: `${action.label} failed: ${error.message}` });
+    } finally {
+      setGateBusy(null);
     }
   };
 
@@ -152,6 +216,16 @@ export default function OnboardingScreen({ api, token, onComplete, onOpenSetting
                     <div className="font-mono text-[9px] text-red-300/80 mt-1">Blocks production release, not local operation</div>
                   )}
                   {item.action && <div className="font-mono text-[9px] text-amber-300/80 mt-1">{item.action}</div>}
+                  {gateActions[item.key] && item.status !== 'pass' && (
+                    <button
+                      onClick={() => runGateAction(item.key)}
+                      disabled={Boolean(gateBusy)}
+                      className="mt-2 inline-flex items-center gap-2 px-3 py-1.5 border border-cyan-500/40 text-cyan-200 bg-cyan-950/20 font-display text-[9px] tracking-widest uppercase hover:bg-cyan-950/40 disabled:opacity-40"
+                    >
+                      {gateBusy === item.key ? <RefreshCw size={11} className="animate-spin" /> : <Play size={11} />}
+                      {gateBusy === item.key ? 'Running' : gateActions[item.key].label}
+                    </button>
+                  )}
                 </div>
               </div>
             ))}
