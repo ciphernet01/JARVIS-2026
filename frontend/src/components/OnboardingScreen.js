@@ -149,6 +149,13 @@ export default function OnboardingScreen({ api, token, onComplete, onOpenSetting
   const items = readiness?.items || [];
   const operationBlocked = (readiness?.operation_blockers || 0) > 0;
   const releaseBlocked = (readiness?.release_blockers || readiness?.blockers || 0) > 0;
+  const operationStatus = readiness?.operation_status || readiness?.overall || 'scanning';
+  const releaseStatus = readiness?.release_status || 'scanning';
+  const statusTone = (status) => {
+    if (status === 'ready') return 'text-green-300 border-green-500/30 bg-green-950/20';
+    if (status === 'blocked') return 'text-red-300 border-red-500/30 bg-red-950/20';
+    return 'text-amber-200 border-amber-500/30 bg-amber-950/15';
+  };
 
   return (
     <div className="min-h-screen bg-slate-950 text-cyan-100 p-6 overflow-y-auto" data-testid="onboarding-screen">
@@ -164,12 +171,30 @@ export default function OnboardingScreen({ api, token, onComplete, onOpenSetting
           </div>
         </header>
 
-        <div className="grid grid-cols-3 gap-3 mb-5">
+        <div className="grid grid-cols-4 gap-3 mb-5">
+          <div className={`border p-4 ${statusTone(operationStatus)}`}>
+            <div className="font-display text-[9px] tracking-widest uppercase opacity-60 mb-1">Local Operation</div>
+            <div className="font-mono text-sm uppercase">{operationStatus.replaceAll('_', ' ')}</div>
+            <div className="font-mono text-[9px] opacity-70 mt-2">{readiness ? `${readiness.operation_blockers || 0} blocker(s)` : 'Scanning'}</div>
+          </div>
+          <div className={`border p-4 ${statusTone(releaseStatus)}`}>
+            <div className="font-display text-[9px] tracking-widest uppercase opacity-60 mb-1">Production ISO</div>
+            <div className="font-mono text-sm uppercase">{releaseStatus.replaceAll('_', ' ')}</div>
+            <div className="font-mono text-[9px] opacity-70 mt-2">{readiness ? `${readiness.release_blockers || readiness.blockers || 0} blocker(s)` : 'Scanning'}</div>
+          </div>
+          <div className="border border-cyan-900/40 bg-slate-950/70 p-4">
+            <AlertTriangle size={18} className="text-amber-300 mb-2" />
+            <div className="font-display text-[9px] tracking-widest uppercase text-cyan-300/40 mb-1">Warnings</div>
+            <div className="font-mono text-sm text-cyan-100">{readiness?.warnings ?? '-'} item(s)</div>
+          </div>
           <div className="border border-cyan-900/40 bg-slate-950/70 p-4">
             <ShieldCheck size={18} className="text-cyan-400 mb-2" />
             <div className="font-display text-[9px] tracking-widest uppercase text-cyan-300/40 mb-1">Safety Gates</div>
             <div className="font-mono text-sm text-cyan-100">Active before control-plane changes</div>
           </div>
+        </div>
+
+        <div className="grid grid-cols-3 gap-3 mb-5">
           <div className="border border-cyan-900/40 bg-slate-950/70 p-4">
             <Terminal size={18} className="text-cyan-400 mb-2" />
             <div className="font-display text-[9px] tracking-widest uppercase text-cyan-300/40 mb-1">Operator Core</div>
