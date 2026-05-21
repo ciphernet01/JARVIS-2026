@@ -83,6 +83,8 @@ export default function OnboardingScreen({ api, token, onComplete, onOpenSetting
   };
 
   const items = readiness?.items || [];
+  const operationBlocked = (readiness?.operation_blockers || 0) > 0;
+  const releaseBlocked = (readiness?.release_blockers || readiness?.blockers || 0) > 0;
 
   return (
     <div className="min-h-screen bg-slate-950 text-cyan-100 p-6 overflow-y-auto" data-testid="onboarding-screen">
@@ -122,6 +124,12 @@ export default function OnboardingScreen({ api, token, onComplete, onOpenSetting
           </div>
         )}
 
+        {readiness && !operationBlocked && releaseBlocked && (
+          <div className="mb-4 border border-amber-500/30 bg-amber-950/15 p-3 font-mono text-[10px] text-amber-200">
+            Local operation is available. Production ISO rollout remains blocked until release evidence, audit, and validation gates pass.
+          </div>
+        )}
+
         <section className="border border-cyan-900/40 bg-black/20 mb-5">
           <div className="flex items-center justify-between p-3 border-b border-cyan-900/30">
             <div className="font-display text-[10px] tracking-[0.2em] uppercase text-cyan-300/60">Readiness Checklist</div>
@@ -136,10 +144,13 @@ export default function OnboardingScreen({ api, token, onComplete, onOpenSetting
           <div className="divide-y divide-cyan-900/20">
             {items.map((item) => (
               <div key={item.key} className="grid grid-cols-[28px_200px_1fr] gap-3 p-3 items-start">
-                {item.status === 'pass' ? <CheckCircle2 size={16} className="text-green-400 mt-0.5" /> : <AlertTriangle size={16} className="text-amber-400 mt-0.5" />}
+                {item.status === 'pass' ? <CheckCircle2 size={16} className="text-green-400 mt-0.5" /> : <AlertTriangle size={16} className={`${item.status === 'fail' ? 'text-red-400' : 'text-amber-400'} mt-0.5`} />}
                 <div className="font-display text-[10px] tracking-widest uppercase text-cyan-200">{item.label}</div>
                 <div>
                   <div className="font-mono text-[10px] text-cyan-100/80">{item.detail}</div>
+                  {item.status === 'fail' && !item.blocks_operation && (
+                    <div className="font-mono text-[9px] text-red-300/80 mt-1">Blocks production release, not local operation</div>
+                  )}
                   {item.action && <div className="font-mono text-[9px] text-amber-300/80 mt-1">{item.action}</div>}
                 </div>
               </div>
@@ -165,7 +176,7 @@ export default function OnboardingScreen({ api, token, onComplete, onOpenSetting
           </div>
           <button
             onClick={completeSetup}
-            disabled={readiness?.overall === 'blocked'}
+            disabled={!readiness || operationBlocked}
             className="px-5 py-2 border border-cyan-500/50 text-cyan-200 bg-cyan-950/20 font-display text-[10px] tracking-widest uppercase hover:bg-cyan-950/40 disabled:opacity-40"
             data-testid="complete-onboarding"
           >

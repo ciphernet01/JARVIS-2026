@@ -748,6 +748,7 @@ def _readiness_item(
     status: str,
     detail: str,
     action: Optional[str] = None,
+    blocks_operation: Optional[bool] = None,
 ) -> Dict[str, Any]:
     return {
         "key": key,
@@ -755,6 +756,7 @@ def _readiness_item(
         "status": status,
         "detail": detail,
         "action": action,
+        "blocks_operation": status == "fail" if blocks_operation is None else blocks_operation,
     }
 
 
@@ -851,6 +853,7 @@ def _os_readiness_payload() -> Dict[str, Any]:
         "pass" if security_status == "pass" else "fail" if security_status == "fail" else "warn",
         f"Latest audit {security_status} / score {latest_security.get('score')}" if latest_security else "No security hardening audit captured yet",
         "Run security audit" if not latest_security or security_status != "pass" else None,
+        blocks_operation=False,
     ))
 
     performance_reports = _get_performance_baseline_manager().list_reports(limit=1)
@@ -865,6 +868,7 @@ def _os_readiness_payload() -> Dict[str, Any]:
             f"{latest_performance.get('summary', {}).get('rss_growth_mb')} MB"
         ) if latest_performance else "No performance baseline captured yet",
         "Run performance baseline" if not latest_performance or performance_status != "pass" else None,
+        blocks_operation=False,
     ))
 
     failover_reports = _get_failover_drill_manager().list_reports(limit=1)
@@ -876,6 +880,7 @@ def _os_readiness_payload() -> Dict[str, Any]:
         "pass" if failover_status == "pass" else "fail" if failover_status == "fail" else "warn",
         f"Latest drill {failover_status} / score {latest_failover.get('score')}" if latest_failover else "No failover drill captured yet",
         "Run failover drill" if not latest_failover or failover_status != "pass" else None,
+        blocks_operation=False,
     ))
 
     evidence_bundles = _get_release_evidence_manager().list_bundles(limit=1)
@@ -887,20 +892,27 @@ def _os_readiness_payload() -> Dict[str, Any]:
         "pass" if evidence_status == "ready" else "fail" if evidence_status == "blocked" else "warn",
         f"Latest bundle {evidence_status} / score {latest_evidence.get('score')}" if latest_evidence else "No release-candidate evidence bundle captured yet",
         "Create release evidence bundle" if not latest_evidence or evidence_status != "ready" else None,
+        blocks_operation=False,
     ))
 
     status_rank = {"fail": 0, "warn": 1, "pass": 2}
     score = round(sum(status_rank.get(item["status"], 0) for item in items) / (len(items) * 2), 2)
-    blockers = [item for item in items if item["status"] == "fail"]
+    release_blockers = [item for item in items if item["status"] == "fail"]
+    operation_blockers = [item for item in release_blockers if item.get("blocks_operation")]
     warnings = [item for item in items if item["status"] == "warn"]
+    operation_overall = "blocked" if operation_blockers else "ready_with_warnings" if warnings or release_blockers else "ready"
 
     return {
         "status": "success",
-        "overall": "blocked" if blockers else "ready_with_warnings" if warnings else "ready",
+        "overall": operation_overall,
+        "operation_status": operation_overall,
+        "release_status": "blocked" if release_blockers else "ready_with_warnings" if warnings else "ready",
         "score": score,
         "items": items,
         "warnings": len(warnings),
-        "blockers": len(blockers),
+        "blockers": len(release_blockers),
+        "release_blockers": len(release_blockers),
+        "operation_blockers": len(operation_blockers),
         "generated_at": datetime.now(timezone.utc).isoformat(),
     }
 
