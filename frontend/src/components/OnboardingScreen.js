@@ -11,7 +11,7 @@ async function readResponse(resp) {
   }
 }
 
-export default function OnboardingScreen({ api, token, onComplete, onOpenSettings }) {
+export default function OnboardingScreen({ api, token, onComplete, onOpenSettings, onUnauthorized }) {
   const [readiness, setReadiness] = useState(null);
   const [loading, setLoading] = useState(true);
   const [actionBusy, setActionBusy] = useState(false);
@@ -26,6 +26,12 @@ export default function OnboardingScreen({ api, token, onComplete, onOpenSetting
       });
       const data = await readResponse(resp);
       if (!resp.ok) {
+        if (resp.status === 401) {
+          localStorage.removeItem('jarvis_token');
+          setMessage({ success: false, text: 'Session expired. Returning to secure entry.' });
+          setTimeout(() => onUnauthorized?.(), 800);
+          return;
+        }
         setMessage({ success: false, text: data.detail || data.message || 'Readiness check failed.' });
       } else {
         setReadiness(data);
@@ -35,7 +41,7 @@ export default function OnboardingScreen({ api, token, onComplete, onOpenSetting
     } finally {
       setLoading(false);
     }
-  }, [api, token]);
+  }, [api, token, onUnauthorized]);
 
   useEffect(() => {
     fetchReadiness();
@@ -45,7 +51,7 @@ export default function OnboardingScreen({ api, token, onComplete, onOpenSetting
         await fetch(`${api}/api/os/voice/speak`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'X-JARVIS-TOKEN': token },
-          body: JSON.stringify({ text: "Welcome to J.A.R.V.I.S Operating System. I am conducting a final readiness scan of your neural shell. Please review the checklist while I calibrate your systems." }),
+          body: JSON.stringify({ text: "Welcome to A.S.T.R.A Operating System. I am conducting a final readiness scan of your spatial shell. Please review the checklist while I calibrate your systems." }),
         });
       } catch (e) { console.warn("Voice onboarding greeting failed", e); }
     };
@@ -83,7 +89,7 @@ export default function OnboardingScreen({ api, token, onComplete, onOpenSetting
       <div className="max-w-5xl mx-auto">
         <header className="flex items-center justify-between gap-4 border-b border-cyan-900/40 pb-4 mb-5">
           <div>
-            <div className="font-display text-[10px] tracking-[0.28em] uppercase text-cyan-300/50 mb-2">JARVIS OS First Run</div>
+            <div className="font-display text-[10px] tracking-[0.28em] uppercase text-cyan-300/50 mb-2">A.S.T.R.A OS First Run</div>
             <h1 className="font-display text-2xl tracking-tight uppercase text-cyan-300">Operational Readiness</h1>
           </div>
           <div className="text-right">
@@ -163,7 +169,7 @@ export default function OnboardingScreen({ api, token, onComplete, onOpenSetting
             className="px-5 py-2 border border-cyan-500/50 text-cyan-200 bg-cyan-950/20 font-display text-[10px] tracking-widest uppercase hover:bg-cyan-950/40 disabled:opacity-40"
             data-testid="complete-onboarding"
           >
-            Enter JARVIS OS
+            Enter A.S.T.R.A OS
           </button>
         </footer>
       </div>

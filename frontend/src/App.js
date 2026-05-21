@@ -85,6 +85,7 @@ function App() {
       <OnboardingScreen
         api={API}
         token={token}
+        onUnauthorized={handleLogout}
         onComplete={() => setOnboardingComplete(true)}
         onOpenSettings={() => {
           localStorage.setItem('jarvis_onboarding_complete', 'true');
