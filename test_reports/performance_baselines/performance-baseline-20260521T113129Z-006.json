@@ -1,0 +1,97 @@
+{
+  "created_at": "2026-05-21T11:31:24.058524+00:00",
+  "duration_seconds": 5.0,
+  "id": "performance-baseline-20260521T113129Z-006",
+  "interval_seconds": 1.0,
+  "label": "first-run-performance-baseline",
+  "notes": "Captured from A.S.T.R.A first-run readiness.",
+  "overall_status": "pass",
+  "sample_count": 6,
+  "samples": [
+    {
+      "elapsed_ms": 0,
+      "handle_count": null,
+      "operation_latency_ms": null,
+      "operation_success": null,
+      "process_cpu_percent": 0.0,
+      "process_rss_mb": 301.14,
+      "system_memory_percent": 70.9,
+      "thread_count": 29,
+      "timestamp": "2026-05-21T11:31:24.058721+00:00"
+    },
+    {
+      "elapsed_ms": 1000,
+      "handle_count": null,
+      "operation_latency_ms": null,
+      "operation_success": null,
+      "process_cpu_percent": 0.0,
+      "process_rss_mb": 301.14,
+      "system_memory_percent": 70.8,
+      "thread_count": 29,
+      "timestamp": "2026-05-21T11:31:25.059183+00:00"
+    },
+    {
+      "elapsed_ms": 2001,
+      "handle_count": null,
+      "operation_latency_ms": null,
+      "operation_success": null,
+      "process_cpu_percent": 0.0,
+      "process_rss_mb": 301.14,
+      "system_memory_percent": 70.8,
+      "thread_count": 29,
+      "timestamp": "2026-05-21T11:31:26.059564+00:00"
+    },
+    {
+      "elapsed_ms": 3001,
+      "handle_count": null,
+      "operation_latency_ms": null,
+      "operation_success": null,
+      "process_cpu_percent": 0.0,
+      "process_rss_mb": 301.14,
+      "system_memory_percent": 70.8,
+      "thread_count": 29,
+      "timestamp": "2026-05-21T11:31:27.060140+00:00"
+    },
+    {
+      "elapsed_ms": 4002,
+      "handle_count": null,
+      "operation_latency_ms": null,
+      "operation_success": null,
+      "process_cpu_percent": 0.0,
+      "process_rss_mb": 301.14,
+      "system_memory_percent": 70.7,
+      "thread_count": 29,
+      "timestamp": "2026-05-21T11:31:28.060596+00:00"
+    },
+    {
+      "elapsed_ms": 5000,
+      "handle_count": null,
+      "operation_latency_ms": null,
+      "operation_success": null,
+      "process_cpu_percent": 1.0,
+      "process_rss_mb": 301.14,
+      "system_memory_percent": 70.6,
+      "thread_count": 29,
+      "timestamp": "2026-05-21T11:31:29.059029+00:00"
+    }
+  ],
+  "summary": {
+    "cpu_avg_percent": 0.2,
+    "cpu_max_percent": 1.0,
+    "handle_end": null,
+    "handle_growth": null,
+    "handle_start": null,
+    "operation_count": 0,
+    "operation_latency_avg_ms": null,
+    "operation_latency_max_ms": null,
+    "operation_success_rate": null,
+    "rss_end_mb": 301.14,
+    "rss_growth_mb": 0.0,
+    "rss_max_mb": 301.14,
+    "rss_start_mb": 301.14,
+    "system_memory_max_percent": 70.9,
+    "thread_end": 29,
+    "thread_growth": 0,
+    "thread_start": 29
+  }
+}

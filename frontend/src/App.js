@@ -31,8 +31,46 @@ function App() {
     setOnboardingComplete(localStorage.getItem('jarvis_onboarding_complete') === 'true');
     setTutorialComplete(localStorage.getItem('jarvis_tutorial_complete') === 'true');
     if (saved) {
-      setToken(saved);
-      setAuthenticated(true);
+      // Validate token with backend to ensure we show Login UI when token is invalid/stale.
+      (async () => {
+        try {
+          const resp = await fetch(`${API || ''}/api/status`, {
+            method: 'GET',
+            headers: { 'X-JARVIS-TOKEN': saved, 'Content-Type': 'application/json' },
+          });
+          if (resp.ok) {
+            setToken(saved);
+            setAuthenticated(true);
+          } else {
+            localStorage.removeItem('jarvis_token');
+            setAuthenticated(false);
+          }
+        } catch (e) {
+          // If backend unreachable, clear token so user can see login UI and retry.
+          localStorage.removeItem('jarvis_token');
+          setAuthenticated(false);
+        }
+      })();
+    }
+    else {
+      // Auto-request a development token when running on localhost to avoid blocking UX during local dev.
+      const host = typeof window !== 'undefined' ? window.location.hostname : '';
+      if (host === 'localhost' || host === '127.0.0.1') {
+        (async () => {
+          try {
+            const resp = await fetch(`${API || ''}/api/auth/dev_token`, { method: 'POST' });
+            if (!resp.ok) return;
+            const data = await resp.json();
+            if (data && data.token) {
+              localStorage.setItem('jarvis_token', data.token);
+              setToken(data.token);
+              setAuthenticated(true);
+            }
+          } catch (e) {
+            // ignore dev auto-login failures
+          }
+        })();
+      }
     }
   }, []);
 

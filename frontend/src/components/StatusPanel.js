@@ -24,6 +24,8 @@ export default function StatusPanel({ status }) {
     { label: 'Platform', value: status.platform || 'Debian Neural Shell' },
     { label: 'Uptime', value: formatUptime(status.uptime_seconds || 0) },
     { label: 'Skills', value: String((status.skills || []).length) },
+    { label: 'Orchestration', value: status.orchestration_ready ? 'Ready' : 'Booting', online: status.orchestration_ready },
+    { label: 'ReAct Agent', value: status.react_agent_enabled ? 'Hot' : 'Idle', online: status.react_agent_enabled },
   ];
 
   return (

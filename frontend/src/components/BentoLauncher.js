@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useRef } from 'react';
 import { 
   Terminal, 
   Settings, 
@@ -15,7 +15,34 @@ import {
   Play
 } from 'lucide-react';
 
-export default function BentoLauncher({ isOpen, onClose, onLaunch }) {
+export default function BentoLauncher({ isOpen, onClose, onLaunch, position, onPositionChange, onFocus, zIndex = 110 }) {
+  const dragRef = useRef(null);
+  const offsetRef = useRef({ x: 0, y: 0 });
+  const draggingRef = useRef(false);
+
+  useEffect(() => {
+    const stopDrag = () => {
+      draggingRef.current = false;
+    };
+
+    const moveDrag = (event) => {
+      if (!draggingRef.current || !onPositionChange || !position) return;
+      const nextX = Math.max(16, event.clientX - offsetRef.current.x);
+      const nextY = Math.max(16, event.clientY - offsetRef.current.y);
+      onPositionChange({ x: nextX, y: nextY });
+    };
+
+    window.addEventListener('pointermove', moveDrag);
+    window.addEventListener('pointerup', stopDrag);
+    window.addEventListener('pointercancel', stopDrag);
+
+    return () => {
+      window.removeEventListener('pointermove', moveDrag);
+      window.removeEventListener('pointerup', stopDrag);
+      window.removeEventListener('pointercancel', stopDrag);
+    };
+  }, [onPositionChange, position]);
+
   if (!isOpen) return null;
 
   const items = [
@@ -31,10 +58,30 @@ export default function BentoLauncher({ isOpen, onClose, onLaunch }) {
   ];
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/80 backdrop-blur-xl animate-in fade-in duration-300">
-      <div className="max-w-4xl w-full p-8 relative">
+    <div className="fixed inset-0 z-[100] bg-slate-950/70 backdrop-blur-xl animate-in fade-in duration-300" onPointerDown={onFocus}>
+      <div
+        ref={dragRef}
+        className="fixed w-full max-w-4xl p-8 spatial-window"
+        style={{
+          left: `${position?.x ?? 80}px`,
+          top: `${position?.y ?? 80}px`,
+          zIndex,
+        }}
+        onPointerDown={onFocus}
+      >
         {/* Header */}
-        <div className="flex items-center justify-between mb-8 border-b border-cyan-500/20 pb-6">
+        <div
+          className="flex items-center justify-between mb-8 border-b border-cyan-500/20 pb-6 cursor-move select-none"
+          onPointerDown={(event) => {
+            if (!onPositionChange || !position) return;
+            draggingRef.current = true;
+            offsetRef.current = {
+              x: event.clientX - position.x,
+              y: event.clientY - position.y,
+            };
+            onFocus?.();
+          }}
+        >
           <div className="flex items-center gap-4">
             <div className="p-3 bg-cyan-500/10 border border-cyan-500/40 rounded-sm">
               <LayoutGrid size={24} className="text-cyan-400" />
@@ -47,6 +94,7 @@ export default function BentoLauncher({ isOpen, onClose, onLaunch }) {
           <button 
             onClick={onClose}
             className="p-3 text-cyan-500/40 hover:text-cyan-400 hover:bg-cyan-500/10 transition-all border border-transparent hover:border-cyan-500/20"
+            onPointerDown={onFocus}
           >
             <X size={24} />
           </button>
@@ -58,6 +106,7 @@ export default function BentoLauncher({ isOpen, onClose, onLaunch }) {
             <button
               key={item.id}
               onClick={() => { onLaunch(item.id); onClose(); }}
+              onPointerDown={onFocus}
               className="group relative flex items-start gap-4 p-5 bg-cyan-950/5 border border-cyan-900/30 hover:border-cyan-400/50 hover:bg-cyan-900/20 transition-all text-left overflow-hidden"
             >
               <div className="absolute top-0 right-0 p-2 opacity-0 group-hover:opacity-100 transition-opacity">

@@ -236,7 +236,7 @@ Total Dev Time: 60-80 hours (~2 weeks sprint)
 1. **Set up LLM** (Choose one):
    ```
    Option 1: Local LLaMA 7B (~4GB VRAM)
-   Option 2: Ollama (Docker-based LLM hosting)
+    Option 2: Ollama (local LLM hosting)
    Option 3: OpenAI API (cloud-based)
    ```
 

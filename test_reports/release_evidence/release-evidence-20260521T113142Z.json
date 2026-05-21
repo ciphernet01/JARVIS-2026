@@ -1,0 +1,68 @@
+{
+  "created_at": "2026-05-21T11:31:42.597210+00:00",
+  "id": "release-evidence-20260521T113142Z",
+  "items": [
+    {
+      "detail": "Latest report warn / score 0.81",
+      "key": "security_audit",
+      "label": "Security Audit",
+      "recommendation": "Review latest security audit findings.",
+      "report_id": "security-audit-20260521T113136Z",
+      "report_path": "/home/kali/Downloads/JARVIS-2026/test_reports/security_audit/security-audit-20260521T113136Z.json",
+      "required": true,
+      "status": "warn"
+    },
+    {
+      "detail": "Latest report pass",
+      "key": "performance_baseline",
+      "label": "Performance Baseline",
+      "recommendation": null,
+      "report_id": "performance-baseline-20260521T113129Z-006",
+      "report_path": "test_reports/performance_baselines/performance-baseline-20260521T113129Z-006.json",
+      "required": true,
+      "status": "pass"
+    },
+    {
+      "detail": "Latest report pass / score 1.0",
+      "key": "failover_drill",
+      "label": "Failover Drill",
+      "recommendation": null,
+      "report_id": "failover-drill-20260521T113136Z",
+      "report_path": "test_reports/failover_drills/failover-drill-20260521T113136Z.json",
+      "required": true,
+      "status": "pass"
+    },
+    {
+      "detail": "Latest report fail / score 87",
+      "key": "hardware_validation",
+      "label": "Hardware Validation",
+      "recommendation": "Review latest hardware validation findings.",
+      "report_id": "20260521T113107Z-7463aa14",
+      "report_path": "test_reports/hardware_validation/20260521T113107Z-7463aa14.json",
+      "required": false,
+      "status": "fail"
+    },
+    {
+      "detail": "No saved evidence found.",
+      "key": "hardware_stress",
+      "label": "Hardware Stress",
+      "recommendation": "Capture stress and thermal evidence on target devices.",
+      "report_id": null,
+      "report_path": null,
+      "required": false,
+      "status": "missing"
+    }
+  ],
+  "label": "first-run-release-evidence",
+  "notes": "Captured from A.S.T.R.A first-run readiness.",
+  "release_status": "ready_with_warnings",
+  "score": 0.62,
+  "summary": {
+    "fail": 1,
+    "missing": 1,
+    "pass": 2,
+    "required_failed": 0,
+    "required_missing": 0,
+    "warn": 1
+  }
+}

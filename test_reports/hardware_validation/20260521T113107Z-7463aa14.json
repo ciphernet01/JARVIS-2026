@@ -1,0 +1,212 @@
+{
+  "checks": [
+    {
+      "category": "system",
+      "evidence": {
+        "minimum": 2,
+        "preferred": 4,
+        "unit": "logical cores",
+        "value": 4
+      },
+      "message": "CPU cores meets production target.",
+      "name": "CPU cores",
+      "recommendation": "",
+      "status": "pass"
+    },
+    {
+      "category": "system",
+      "evidence": {
+        "minimum": 4,
+        "preferred": 8,
+        "unit": "GB total RAM",
+        "value": 7.8
+      },
+      "message": "Memory meets minimum target but is below preferred target.",
+      "name": "Memory",
+      "recommendation": "Prefer at least 8 GB total RAM.",
+      "status": "warn"
+    },
+    {
+      "category": "storage",
+      "evidence": {
+        "minimum": 10,
+        "preferred": 25,
+        "unit": "GB free",
+        "value": 52.3
+      },
+      "message": "Disk free meets production target.",
+      "name": "Disk free",
+      "recommendation": "",
+      "status": "pass"
+    },
+    {
+      "category": "display",
+      "evidence": {
+        "height": 1080,
+        "width": 1920
+      },
+      "message": "Display geometry detected.",
+      "name": "Display detection",
+      "recommendation": "",
+      "status": "pass"
+    },
+    {
+      "category": "audio",
+      "evidence": {
+        "device_count": 2,
+        "has_input": true,
+        "has_output": true
+      },
+      "message": "Audio input and output devices detected.",
+      "name": "Audio input/output",
+      "recommendation": "",
+      "status": "pass"
+    },
+    {
+      "category": "audio",
+      "evidence": {
+        "available": false,
+        "message": "PyAudio is unavailable; audio workload readiness cannot be probed."
+      },
+      "message": "PyAudio is unavailable; audio workload readiness cannot be probed.",
+      "name": "Audio workload readiness",
+      "recommendation": "Install/enable PyAudio and validate default input/output devices on target hardware.",
+      "status": "unknown"
+    },
+    {
+      "category": "audio",
+      "evidence": {
+        "available": false,
+        "estimated_roundtrip_ms": null,
+        "message": "PyAudio is unavailable; latency cannot be estimated."
+      },
+      "message": "PyAudio is unavailable; latency cannot be estimated.",
+      "name": "Audio latency probe",
+      "recommendation": "Install/enable PyAudio or add an OS-specific loopback latency probe.",
+      "status": "unknown"
+    },
+    {
+      "category": "camera",
+      "evidence": {
+        "available": true,
+        "device_count": 1,
+        "devices": [
+          {
+            "fps": 30,
+            "id": 0,
+            "name": "Default Camera",
+            "resolution": "1280x720"
+          }
+        ]
+      },
+      "message": "Camera stack is available.",
+      "name": "Camera compatibility",
+      "recommendation": "",
+      "status": "pass"
+    },
+    {
+      "category": "camera",
+      "evidence": {
+        "available": true,
+        "captured": false,
+        "message": "Camera could not be enabled for snapshot workload."
+      },
+      "message": "Camera did not capture a validation frame.",
+      "name": "Camera snapshot workload",
+      "recommendation": "Check camera permissions, driver availability, and exclusive access conflicts.",
+      "status": "fail"
+    },
+    {
+      "category": "network",
+      "evidence": {
+        "connected_interfaces": 2,
+        "wifi_enabled": false,
+        "wifi_present": false
+      },
+      "message": "At least one network interface is connected.",
+      "name": "Network connectivity",
+      "recommendation": "",
+      "status": "pass"
+    },
+    {
+      "category": "power",
+      "evidence": {
+        "ac_powered": true,
+        "battery_percent": null
+      },
+      "message": "No battery detected; treating as desktop/AC configuration.",
+      "name": "Battery state",
+      "recommendation": "",
+      "status": "pass"
+    },
+    {
+      "category": "thermal",
+      "evidence": {
+        "sensor_support": true
+      },
+      "message": "Thermal sensor API is available.",
+      "name": "Thermal sensor support",
+      "recommendation": "",
+      "status": "pass"
+    },
+    {
+      "category": "gpu",
+      "evidence": {
+        "available": true,
+        "command": [
+          "lspci"
+        ],
+        "devices": [
+          {
+            "name": "00:0f.0 VGA compatible controller: VMware SVGA II Adapter"
+          }
+        ],
+        "message": "Linux lspci GPU probe completed.",
+        "returncode": 0,
+        "stderr": "",
+        "stdout": "00:00.0 Host bridge: Intel Corporation 440BX/ZX/DX - 82443BX/ZX/DX Host bridge (rev 01)\n00:01.0 PCI bridge: Intel Corporation 440BX/ZX/DX - 82443BX/ZX/DX AGP bridge (rev 01)\n00:07.0 ISA bridge: Intel Corporation 82371AB/EB/MB PIIX4 ISA (rev 08)\n00:07.1 IDE interface: Intel Corporation 82371AB/EB/MB PIIX4 IDE (rev 01)\n00:07.3 Bridge: Intel Corporation 82371AB/EB/MB PIIX4 ACPI (rev 08)\n00:07.7 System peripheral: VMware Virtual Machine Communication Interface (rev 10)\n00:0f.0 VGA compatible controller: VMware SVGA II Adapter\n00:10.0 SCSI storage controller: Broadcom / LSI 53c1030 PCI-X Fusion-MPT Dual Ultra320 SCSI (rev 01)\n00:11.0 PCI bridge: VMware PCI bridge (rev 02)\n00:15.0 PCI bridge: VMware PCI Express Root Port (rev 01)\n00:15.1 PCI bridge: VMware PCI Express Root Port (rev 01)\n00:15.2 PCI bridge: VMware PCI Express Root Port (rev 01)\n00:15.3 PCI bridge: VMware PCI Express Root Port (rev 01)\n00:15.4 PCI bridge: VMware PCI Express Root Port (rev 01)\n00:15.5 PCI bridge: VMware PCI Express Root Port (rev 01)\n00:15.6 PCI bridge: VMware PCI Express Root Port (rev 01)\n00:15.7 PCI bridge: VMware PCI Express Root Port (rev 01)\n00:16.0 PCI bridge: VMware PCI Express Root Port (rev 01)\n00:16.1 PCI bridge: VMware PCI Express Root Port (rev 01)\n00:16.2 PCI bridge: VMware PCI Express Root Port (rev 01)\n00:16.3 PCI bridge: VMware PCI Express Root Port (rev 01)\n00:16.4 PCI bridge: VMware PCI Express Root Port (rev 01)\n00:16.5 PCI bridge: VMware PCI Express Root Port (rev 01)\n00:16.6 PCI bridge: VMware PCI Express Root Port (rev 01)\n00:16.7 PCI bridge: VMware PCI Express Root Port (rev 01)\n00:17.0 PCI bridge: VMware PCI Express Root Port (rev 01)\n00:17.1 PCI bridge: VMware PCI Express Root Port (rev 01)\n00:17.2 PCI bridge: VMware PCI Express Root Port (rev 01)\n00:17.3 PCI bridge: VMware PCI Express Root Port (rev 01)\n00:17.4 PCI bridge: VMware PCI Express Root Port (rev 01)\n00:17.5 PCI bridge: VMware PCI Express Root Port (rev 01)\n00:17.6 PCI bridge: VMware PCI Express Root Port (rev 01)\n00:17.7 PCI bridge: VMware PCI Express Root Port (rev 01)\n00:18.0 PCI bridge: VMware PCI Express Root Port (rev 01)\n00:18.1 PCI bridge: VMware PCI Express Root Port (rev 01)\n00:18.2 PCI bridge: VMware PCI Express Root Port (rev 01)\n00:18.3 PCI bridge: VMware PCI Express Root Port (rev 01)\n00:18.4 PCI bridge: VMware PCI Express Root Port (rev 01)\n00:18.5 PCI bridge: VMware PCI Express Root Port (rev 01)\n00:18.6 PCI bridge: VMware PCI Express Root Port (rev 01)\n00:18.7 PCI bridge: VMware PCI Express Root Port (rev 01)\n02:00.0 USB controller: VMware USB1.1 UHCI Controller\n02:01.0 Ethernet controller: Intel Corporation 82545EM Gigabit Ethernet Controller (Copper) (rev 01)\n02:02.0 Multimedia audio controller: Ensoniq ES1371/ES1373 / Creative Labs CT2518 (rev 02)\n02:03.0 USB controller: VMware USB2 EHCI Controller\n"
+      },
+      "message": "GPU adapter information detected.",
+      "name": "GPU driver validation",
+      "recommendation": "",
+      "status": "pass"
+    },
+    {
+      "category": "bluetooth",
+      "evidence": {
+        "adapters": [],
+        "available": false,
+        "command": [
+          "bluetoothctl",
+          "list"
+        ],
+        "devices": [],
+        "message": "Command '['bluetoothctl', 'list']' timed out after 8 seconds"
+      },
+      "message": "Command '['bluetoothctl', 'list']' timed out after 8 seconds",
+      "name": "Bluetooth driver validation",
+      "recommendation": "Install platform Bluetooth probe tools or validate adapter enumeration manually.",
+      "status": "unknown"
+    }
+  ],
+  "created_at": "2026-05-21T11:30:59.154806+00:00",
+  "id": "20260521T113107Z-7463aa14",
+  "label": "first-run-hardware-validation",
+  "machine": "x86_64",
+  "notes": "Captured from A.S.T.R.A first-run readiness.",
+  "overall_status": "fail",
+  "platform_name": "Linux 6.12.38+kali-amd64",
+  "score": 87,
+  "snapshot_summary": {
+    "battery_percent": null,
+    "camera_available": true,
+    "cpu_cores": 4,
+    "disk_free_gb": 52.3,
+    "machine": "x86_64",
+    "memory_total_gb": 7.8,
+    "microphone_available": true,
+    "network_interfaces": 2,
+    "platform": "Linux 6.12.38+kali-amd64"
+  },
+  "target_config_id": "7463aa1431b5bc2b"
+}

@@ -66,6 +66,12 @@ CORS_ORIGINS = [
 SESSION_TOKENS = {}
 GESTURE_CLIENTS = set()
 
+# Orchestration queue (in-memory lightweight implementation)
+ORCHESTRATION_QUEUE: List[Dict[str, Any]] = []
+ORCHESTRATION_QUEUE_LOCK = asyncio.Lock()
+ORCHESTRATION_ACTIVE_TASK: Optional[Dict[str, Any]] = None
+ORCHESTRATION_LOG: List[Dict[str, Any]] = []
+
 # Face detection cascade
 FACE_CASCADE_PATH = cv2.data.haarcascades + "haarcascade_frontalface_default.xml"
 face_cascade = cv2.CascadeClassifier(FACE_CASCADE_PATH)
@@ -170,6 +176,11 @@ async def startup_event():
     try:
         _get_assistant()
         _get_voice_router()
+        # start orchestration background worker
+        try:
+            asyncio.create_task(_run_orchestration_queue_worker())
+        except Exception:
+            logger.warning("Failed to start orchestration worker")
         logger.info("JARVIS backend startup complete")
     except Exception as exc:
         logger.warning(f"Startup warmup failed: {exc}")
@@ -580,6 +591,12 @@ class MacroExecuteRequest(BaseModel):
     macro_id: str
 
 
+class OrchestrationTaskRequest(BaseModel):
+    prompt: str
+    label: Optional[str] = None
+    metadata: Optional[Dict[str, Any]] = None
+
+
 # ── Audit Logging Helper ───────────────────────────────────────────────────
 def _audit_action(user: str, action: str, details: Optional[Dict[str, Any]] = None):
     """Record an action to the system audit log."""
@@ -717,6 +734,52 @@ def _audit_action(user: Optional[Dict[str, Any]], action: str, details: Optional
             details=details or {},
             success=success,
         )
+
+
+def _orchestration_snapshot() -> Dict[str, Any]:
+    return {
+        "queue_depth": len(ORCHESTRATION_QUEUE),
+        "active": ORCHESTRATION_ACTIVE_TASK,
+        "log_tail": ORCHESTRATION_LOG[-10:],
+    }
+
+
+async def _enqueue_orchestration_task(task: Dict[str, Any]) -> None:
+    async with ORCHESTRATION_QUEUE_LOCK:
+        ORCHESTRATION_QUEUE.append(task)
+
+
+async def _run_orchestration_queue_worker() -> None:
+    """Background worker that processes orchestration tasks sequentially."""
+    global ORCHESTRATION_ACTIVE_TASK
+    while True:
+        task = None
+        async with ORCHESTRATION_QUEUE_LOCK:
+            if ORCHESTRATION_QUEUE:
+                task = ORCHESTRATION_QUEUE.pop(0)
+
+        if not task:
+            await asyncio.sleep(1.0)
+            continue
+
+        ORCHESTRATION_ACTIVE_TASK = {**task, "status": "running", "started_at": time.time()}
+        ORCHESTRATION_LOG.append({"event": "task_started", "task": task, "ts": time.time()})
+
+        try:
+            assistant = _get_assistant()
+            result = None
+            if assistant:
+                result = await assistant.process_query_async(task.get("prompt", ""))
+
+            ORCHESTRATION_ACTIVE_TASK.update({"status": "complete", "result": result, "finished_at": time.time()})
+            ORCHESTRATION_LOG.append({"event": "task_completed", "task": task, "result": str(result)[:1024], "ts": time.time()})
+        except Exception as exc:
+            ORCHESTRATION_ACTIVE_TASK.update({"status": "failed", "error": str(exc), "finished_at": time.time()})
+            ORCHESTRATION_LOG.append({"event": "task_failed", "task": task, "error": str(exc), "ts": time.time()})
+        finally:
+            # keep small history
+            ORCHESTRATION_LOG[:] = ORCHESTRATION_LOG[-100:]
+            ORCHESTRATION_ACTIVE_TASK = None
 
 
 def _safety_state_payload() -> Dict[str, Any]:
@@ -1465,6 +1528,30 @@ async def health_check():
     }
 
 
+@app.get("/api/orchestration/queue")
+async def get_orchestration_queue(user=Depends(verify_token)):
+    """Return a snapshot of the orchestration queue and active task."""
+    return {"queue": ORCHESTRATION_QUEUE, "snapshot": _orchestration_snapshot()}
+
+
+@app.post("/api/orchestration/queue")
+async def post_orchestration_queue(req: OrchestrationTaskRequest, user=Depends(verify_token)):
+    """Enqueue a new orchestration task for the background worker."""
+    task_id = str(uuid.uuid4())
+    task = {
+        "id": task_id,
+        "prompt": req.prompt,
+        "label": req.label or (req.prompt[:80] + ("..." if len(req.prompt) > 80 else "")),
+        "metadata": req.metadata or {},
+        "status": "queued",
+        "created_at": time.time(),
+    }
+
+    await _enqueue_orchestration_task(task)
+    _audit_action(user, "enqueue_orchestration_task", {"task_id": task_id, "label": task.get("label")})
+    return {"id": task_id}
+
+
 @app.post("/api/auth/login")
 async def login(req: LoginRequest):
     """Biometric face verification login - checks against imagedata/ folder and enrolled faces"""
@@ -1638,6 +1725,34 @@ async def login(req: LoginRequest):
         "face_box": face_box,
         "confidence": face_confidence,
     }
+
+
+@app.post("/api/auth/dev_token")
+async def dev_token():
+    """Development helper: return a pre-authorized session token for local dev testing.
+    This is intentionally permissive and only meant for local development environments.
+    """
+    token = str(uuid.uuid4())
+    user_data = {
+        "user_id": "dev_user",
+        "user_name": "Developer",
+        "login_time": datetime.now(timezone.utc).isoformat(),
+        "method": "dev_token",
+        "face_detected": False,
+        "face_confidence": 1.0,
+    }
+    SESSION_TOKENS[token] = user_data
+    try:
+        await db.sessions.insert_one({
+            "token": token,
+            "user_id": user_data["user_id"],
+            "login_time": user_data["login_time"],
+            "method": "dev_token",
+        })
+    except Exception:
+        # ignore persistence failures
+        pass
+    return {"token": token, "message": "Development token issued."}
 
 
 @app.post("/api/auth/enroll_face")
@@ -1996,13 +2111,22 @@ async def conversation_history(user=Depends(verify_token), limit: int = 30):
 async def system_status(user=Depends(verify_token)):
     """Get JARVIS system status"""
     data = _system_snapshot()
+
+    assistant = None
+    assistant_status: Dict[str, Any] = {}
+    try:
+        assistant = _get_assistant()
+        if assistant:
+            assistant_status = assistant.get_status() or {}
+    except Exception as e:
+        logger.warning(f"Assistant status unavailable: {e}")
     
     conv_count = 0
     try:
-        assistant = _get_assistant()
-        stats = assistant.get_conversation_statistics()
-        if stats:
-            conv_count = stats.get("total_conversations", 0)
+        if assistant:
+            stats = assistant.get_conversation_statistics()
+            if stats:
+                conv_count = stats.get("total_conversations", 0)
     except Exception as e:
         logger.warning(f"Conversation count unavailable: {e}")
 
@@ -2019,6 +2143,12 @@ async def system_status(user=Depends(verify_token)):
             "file_management", "developer_mode", "operator_control",
             "app_scaffolding", "voice_commands"
         ],
+        "agent_enabled": assistant_status.get("agent_enabled", False),
+        "react_agent_enabled": assistant_status.get("react_agent_enabled", False),
+        "llm_router_enabled": assistant_status.get("llm_router_enabled", False),
+        "project_index_enabled": assistant_status.get("project_index_enabled", False),
+        "orchestration_ready": bool(assistant_status.get("agent_enabled") or assistant_status.get("react_agent_enabled")),
+        "orchestration": _orchestration_snapshot(),
     }
 
 

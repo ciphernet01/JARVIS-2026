@@ -1,0 +1,78 @@
+{
+  "checks": [
+    {
+      "detail": ".env not found; runtime may rely on host defaults.",
+      "key": "env_file",
+      "label": "Environment File",
+      "recommendation": "Create a production .env from documented secrets.",
+      "severity": "low",
+      "status": "warn"
+    },
+    {
+      "detail": "4 explicit origin(s) configured.",
+      "key": "cors_policy",
+      "label": "CORS Policy",
+      "recommendation": null,
+      "severity": "medium",
+      "status": "pass"
+    },
+    {
+      "detail": "2 active token(s) meet minimum length checks.",
+      "key": "session_tokens",
+      "label": "Session Tokens",
+      "recommendation": null,
+      "severity": "medium",
+      "status": "pass"
+    },
+    {
+      "detail": "5 safety gate(s) active.",
+      "key": "safety_gates",
+      "label": "Safety Gates",
+      "recommendation": null,
+      "severity": "high",
+      "status": "pass"
+    },
+    {
+      "detail": "2 audit artifact(s) found.",
+      "key": "audit_logging",
+      "label": "Audit Logging",
+      "recommendation": null,
+      "severity": "medium",
+      "status": "pass"
+    },
+    {
+      "detail": "Frontend dependency lockfile is present.",
+      "key": "dependency_lockfiles",
+      "label": "Dependency Lockfiles",
+      "recommendation": null,
+      "severity": "medium",
+      "status": "pass"
+    },
+    {
+      "detail": "Runtime artifact directorie(s) present: test_reports.",
+      "key": "runtime_artifacts",
+      "label": "Runtime Artifacts",
+      "recommendation": "Clean or exclude runtime artifacts from production images.",
+      "severity": "low",
+      "status": "warn"
+    },
+    {
+      "detail": "World-readable file(s): memory/preferences/os_preferences.json.",
+      "key": "file_permissions",
+      "label": "Sensitive File Permissions",
+      "recommendation": "Restrict sensitive file permissions.",
+      "severity": "medium",
+      "status": "warn"
+    }
+  ],
+  "duration_ms": 0,
+  "generated_at": "2026-05-21T11:32:26.542913+00:00",
+  "id": "security-audit-20260521T113226Z",
+  "overall_status": "warn",
+  "score": 0.81,
+  "summary": {
+    "fail": 0,
+    "pass": 5,
+    "warn": 3
+  }
+}

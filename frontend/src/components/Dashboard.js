@@ -16,6 +16,7 @@ import BottomDock from './BottomDock';
 import NeuralInsights from './NeuralInsights';
 import BentoLauncher from './BentoLauncher';
 import NotificationHUD from './NotificationHUD';
+import OrchestrationQueuePanel from './OrchestrationQueuePanel';
 import { Code2, Terminal as TermIcon, Settings, Zap, FolderOpen, ShieldCheck, Hand, Minus, X, LayoutGrid } from 'lucide-react';
 
 function normalizeApiBase(api) {
@@ -32,12 +33,48 @@ function buildWsUrl(apiBase, path) {
   return `${apiBase.replace(/^http/, 'ws')}${path}`;
 }
 
+function loadStoredValue(key, fallback) {
+  if (typeof window === 'undefined') return fallback;
+  try {
+    const stored = window.localStorage.getItem(key);
+    return stored == null ? fallback : JSON.parse(stored);
+  } catch {
+    return fallback;
+  }
+}
+
+function saveStoredValue(key, value) {
+  try {
+    window.localStorage.setItem(key, JSON.stringify(value));
+  } catch {
+    // Ignore storage failures in restricted browsers.
+  }
+}
+
+function clampPoint(point, fallback) {
+  if (!point || typeof point.x !== 'number' || typeof point.y !== 'number') return fallback;
+  return {
+    x: Math.max(16, Math.round(point.x)),
+    y: Math.max(16, Math.round(point.y)),
+  };
+}
+
 export default function Dashboard({ token, api, onLogout, initialPanel = 'control', preferences, onPreferencesChange }) {
   const [metrics, setMetrics] = useState(null);
   const [weather, setWeather] = useState(null);
   const [status, setStatus] = useState(null);
   const [activePanel, setActivePanel] = useState(initialPanel);
   const [biosMode, setBiosMode] = useState(false);
+  const [focusedZone, setFocusedZone] = useState('center');
+  const [spatialMode, setSpatialMode] = useState(() => {
+    if (typeof window === 'undefined') return true;
+    try {
+      const stored = window.localStorage.getItem('astra.spatialMode');
+      return stored == null ? false : stored === '1';
+    } catch {
+      return false;
+    }
+  });
 
   const [fetchError, setFetchError] = useState(null);
   const [telemetryFetching, setTelemetryFetching] = useState(false);
@@ -46,10 +83,71 @@ export default function Dashboard({ token, api, onLogout, initialPanel = 'contro
   const statusInFlight = useRef(false);
   const apiBase = useMemo(() => normalizeApiBase(api), [api]);
   const telemetryRefreshMs = Math.max(3, Math.min(30, preferences?.telemetry_refresh_seconds || 5)) * 1000;
+  const launcherDragOffset = useRef({ x: 0, y: 0 });
+  const centerDragOffset = useRef({ x: 0, y: 0 });
+  const apiBaseRef = useRef(apiBase);
+
+  const defaultLauncherPosition = useMemo(() => ({
+    x: typeof window === 'undefined' ? 80 : Math.max(24, Math.round((window.innerWidth - 840) / 2)),
+    y: typeof window === 'undefined' ? 72 : Math.max(48, Math.round((window.innerHeight - 520) / 2)),
+  }), []);
+
+  const [launcherPosition, setLauncherPosition] = useState(() => clampPoint(loadStoredValue('astra.launcherPosition', null), defaultLauncherPosition));
+  const [overlayZ, setOverlayZ] = useState({ launcher: 110, center: 111 });
   
   const isDesktop = !!window.JARVIS_DESKTOP;
   const [isLauncherOpen, setIsLauncherOpen] = useState(false);
   const [lastGesture, setLastGesture] = useState('GESTURE_NONE');
+
+  const raiseOverlay = useCallback((overlayName) => {
+    setOverlayZ((prev) => {
+      const top = Math.max(...Object.values(prev), 100) + 1;
+      return { ...prev, [overlayName]: top };
+    });
+  }, []);
+
+  const panelToZone = useMemo(() => ({
+    control: 'center',
+    terminal: 'center',
+    analytics: 'center',
+    developer: 'center',
+    filesystem: 'right',
+    settings: 'right',
+    gesture: 'left',
+  }), []);
+
+  useEffect(() => {
+    setFocusedZone(panelToZone[activePanel] || 'center');
+  }, [activePanel, panelToZone]);
+
+  useEffect(() => {
+    saveStoredValue('astra.launcherPosition', launcherPosition);
+  }, [launcherPosition]);
+
+  useEffect(() => {
+    const stopDrag = () => {
+      launcherDragOffset.current.dragging = false;
+    };
+
+    const moveDrag = (event) => {
+      if (launcherDragOffset.current.dragging) {
+        setLauncherPosition({
+          x: Math.max(16, event.clientX - launcherDragOffset.current.x),
+          y: Math.max(16, event.clientY - launcherDragOffset.current.y),
+        });
+      }
+    };
+
+    window.addEventListener('pointermove', moveDrag);
+    window.addEventListener('pointerup', stopDrag);
+    window.addEventListener('pointercancel', stopDrag);
+
+    return () => {
+      window.removeEventListener('pointermove', moveDrag);
+      window.removeEventListener('pointerup', stopDrag);
+      window.removeEventListener('pointercancel', stopDrag);
+    };
+  }, []);
 
   const fetchMetrics = useCallback(async () => {
     if (metricsInFlight.current) return;
@@ -117,6 +215,14 @@ export default function Dashboard({ token, api, onLogout, initialPanel = 'contro
     setActivePanel(initialPanel);
   }, [initialPanel]);
 
+  useEffect(() => {
+    try {
+      window.localStorage.setItem('astra.spatialMode', spatialMode ? '1' : '0');
+    } catch {
+      // Ignore storage failures in restricted browsers.
+    }
+  }, [spatialMode]);
+
   // ── Global Gesture Integration ──────────────────────────────────────────
   useEffect(() => {
     // Ensure gesture engine is actively running in the background for global OS bounds
@@ -139,6 +245,7 @@ export default function Dashboard({ token, api, onLogout, initialPanel = 'contro
 
         // Global Gesture Logic
         if (gesture === 'CLOSED_FIST' || gesture === 'GESTURE_FIST') {
+          raiseOverlay('launcher');
           setIsLauncherOpen(prev => !prev);
         } else if (gesture === 'SWIPE_RIGHT' || gesture === 'GESTURE_SWIPE_RIGHT') {
           const nextMap = { terminal: 'os', os: 'filesystem', filesystem: 'analytics', analytics: 'terminal' };
@@ -221,108 +328,65 @@ export default function Dashboard({ token, api, onLogout, initialPanel = 'contro
           >
             BIOS MODE
           </button>
+          <button
+            type="button"
+            onClick={() => setSpatialMode((prev) => !prev)}
+            className={`px-3 py-1 border text-[10px] font-display tracking-[0.25em] uppercase transition-all ${
+              spatialMode ? 'border-cyan-400/60 text-cyan-100 bg-cyan-950/50' : 'border-cyan-900/40 text-cyan-300/60 hover:text-cyan-100'
+            }`}
+            title="Toggle spatial depth mode"
+          >
+            Spatial Accent
+          </button>
           <Clock />
         </div>
       </header>
 
       {/* Main Grid */}
-      <main className="flex-1 grid grid-cols-12 gap-3 p-3 overflow-hidden">
+      <main
+        className={`flex-1 grid grid-cols-12 gap-3 p-3 overflow-hidden ${spatialMode ? 'spatial-mode' : ''}`}
+        data-spatial-mode={spatialMode ? 'enabled' : 'disabled'}
+        data-active-panel={activePanel}
+        data-focused-zone={focusedZone}
+      >
         {/* Left Column - 3 cols */}
-        <div className="col-span-3 flex flex-col gap-3 overflow-y-auto">
+        <div
+          className="col-span-3 flex flex-col gap-3 overflow-y-auto spatial-column spatial-column-left"
+          data-spatial-role="left"
+          data-panel-zone="left"
+          onMouseDown={() => setFocusedZone('left')}
+        >
           <CalendarWidget />
           <SystemDiagnostics metrics={metrics} />
         </div>
 
         {/* Center Column - 6 cols */}
-        <div className="col-span-6 flex flex-col gap-3 overflow-hidden">
-          {/* Arc Reactor + Status */}
-          <div className="flex items-center justify-center py-2">
-            <ArcReactor />
-          </div>
-
-          {/* Terminal / Dev Workspace Toggle */}
-          <div className="flex-1 flex flex-col overflow-hidden border border-cyan-900/50 bg-slate-950/80">
-            <div className="flex border-b border-cyan-900/50">
-              <button
-                onClick={() => setActivePanel('terminal')}
-                className={`flex items-center gap-2 px-4 py-2 text-xs font-display tracking-wider uppercase transition-all ${
-                  activePanel === 'terminal' ? 'text-cyan-400 bg-cyan-950/40 border-b border-cyan-400' : 'text-cyan-300/50 hover:text-cyan-300'
-                }`}
-                data-testid="tab-terminal"
-              >
-                <TermIcon size={14} /> Command Terminal
-              </button>
-              <button
-                onClick={() => setActivePanel('control')}
-                className={`flex items-center gap-2 px-4 py-2 text-xs font-display tracking-wider uppercase transition-all ${
-                  activePanel === 'control' ? 'text-cyan-400 bg-cyan-950/40 border-b border-cyan-400' : 'text-cyan-300/50 hover:text-cyan-300'
-                }`}
-                data-testid="tab-control"
-              >
-                <ShieldCheck size={14} /> OS Control
-              </button>
-              <button
-                onClick={() => setActivePanel('filesystem')}
-                className={`flex items-center gap-2 px-4 py-2 text-xs font-display tracking-wider uppercase transition-all ${
-                  activePanel === 'filesystem' ? 'text-cyan-400 bg-cyan-950/40 border-b border-cyan-400' : 'text-cyan-300/50 hover:text-cyan-300'
-                }`}
-                data-testid="tab-filesystem"
-              >
-                <FolderOpen size={14} /> Filesystem
-              </button>
-              <button
-                onClick={() => setActivePanel('analytics')}
-                className={`flex items-center gap-2 px-4 py-2 text-xs font-display tracking-wider uppercase transition-all ${
-                  activePanel === 'analytics' ? 'text-cyan-400 bg-cyan-950/40 border-b border-cyan-400' : 'text-cyan-300/50 hover:text-cyan-300'
-                }`}
-                data-testid="tab-analytics"
-              >
-                <Zap size={14} /> Analytics
-              </button>
-              <button
-                onClick={() => setActivePanel('developer')}
-                className={`flex items-center gap-2 px-4 py-2 text-xs font-display tracking-wider uppercase transition-all ${
-                  activePanel === 'developer' ? 'text-cyan-400 bg-cyan-950/40 border-b border-cyan-400' : 'text-cyan-300/50 hover:text-cyan-300'
-                }`}
-                data-testid="tab-developer"
-              >
-                <Code2 size={14} /> Developer Mode
-              </button>
-              <button
-                onClick={() => setActivePanel('gesture')}
-                className={`flex items-center gap-2 px-4 py-2 text-xs font-display tracking-wider uppercase transition-all ${
-                  activePanel === 'gesture' ? 'text-cyan-400 bg-cyan-950/40 border-b border-cyan-400' : 'text-cyan-300/50 hover:text-cyan-300'
-                }`}
-                data-testid="tab-gesture"
-              >
-                <Hand size={14} /> Gesture Control
-              </button>
-              <button
-                onClick={() => setActivePanel('settings')}
-                className={`flex items-center gap-2 px-4 py-2 text-xs font-display tracking-wider uppercase transition-all ${
-                  activePanel === 'settings' ? 'text-cyan-400 bg-cyan-950/40 border-b border-cyan-400' : 'text-cyan-300/50 hover:text-cyan-300'
-                }`}
-                data-testid="tab-settings"
-              >
-                <Settings size={14} /> Settings
-              </button>
-            </div>
-            <div className="flex-1 overflow-hidden" data-spatial-scope={activePanel}>
-              {activePanel === 'control' && <SystemControlHUD api={apiBase} token={token} />}
-              {activePanel === 'terminal' && <Terminal api={apiBase} token={token} />}
-              {activePanel === 'filesystem' && <FilesystemExplorer api={apiBase} token={token} />}
-              {activePanel === 'analytics' && <VoiceAnalyticsPanel api={apiBase} token={token} />}
-              {activePanel === 'developer' && <DevWorkspace api={apiBase} token={token} />}
-              {activePanel === 'gesture' && <GestureControlPanel api={apiBase} token={token} />}
-              {activePanel === 'settings' && <SettingsPanel api={apiBase} token={token} preferences={preferences} onPreferencesChange={onPreferencesChange} />}
-            </div>
-          </div>
+        <div
+          className="col-span-6 flex flex-col gap-3 overflow-hidden spatial-column spatial-column-center"
+          data-spatial-role="center"
+          data-panel-zone="center"
+          onMouseDown={() => setFocusedZone('center')}
+        >
+            <CenterWorkspace
+              apiBase={apiBase}
+              token={token}
+              activePanel={activePanel}
+              setActivePanel={setActivePanel}
+              preferences={preferences}
+              onPreferencesChange={onPreferencesChange}
+            />
         </div>
 
         {/* Right Column - 3 cols */}
-        <div className="col-span-3 flex flex-col gap-3 overflow-y-auto">
+        <div
+          className="col-span-3 flex flex-col gap-3 overflow-y-auto spatial-column spatial-column-right"
+          data-spatial-role="right"
+          data-panel-zone="right"
+          onMouseDown={() => setFocusedZone('right')}
+        >
           <WeatherWidget weather={weather} />
           <StatusPanel status={status} />
+          <OrchestrationQueuePanel api={apiBase} token={token} />
           <NeuralInsights api={apiBase} token={token} />
         </div>
       </main>
@@ -336,7 +400,101 @@ export default function Dashboard({ token, api, onLogout, initialPanel = 'contro
         isOpen={isLauncherOpen} 
         onClose={() => setIsLauncherOpen(false)} 
         onLaunch={(id) => setActivePanel(id)} 
+        position={launcherPosition}
+        onPositionChange={setLauncherPosition}
+        onFocus={() => raiseOverlay('launcher')}
+        zIndex={overlayZ.launcher}
       />
+    </div>
+  );
+}
+
+function CenterWorkspace({ apiBase, token, activePanel, setActivePanel, preferences, onPreferencesChange, onDetach, floating = false }) {
+  return (
+    <div className={`flex h-full flex-col overflow-hidden border border-cyan-900/50 bg-slate-950/80 ${floating ? '' : ''}`}>
+      <div className="flex items-center justify-between border-b border-cyan-900/50 px-3 py-2">
+        <div className="flex items-center gap-2">
+          <ArcReactor />
+          <span className="font-display text-[10px] uppercase tracking-[0.25em] text-cyan-300/60">Core Workspace</span>
+        </div>
+        <div />
+      </div>
+
+      <div className="flex border-b border-cyan-900/50">
+        <button
+          onClick={() => setActivePanel('terminal')}
+          className={`flex items-center gap-2 px-4 py-2 text-xs font-display tracking-wider uppercase transition-all ${
+            activePanel === 'terminal' ? 'text-cyan-400 bg-cyan-950/40 border-b border-cyan-400' : 'text-cyan-300/50 hover:text-cyan-300'
+          }`}
+          data-testid="tab-terminal"
+        >
+          <TermIcon size={14} /> Command Terminal
+        </button>
+        <button
+          onClick={() => setActivePanel('control')}
+          className={`flex items-center gap-2 px-4 py-2 text-xs font-display tracking-wider uppercase transition-all ${
+            activePanel === 'control' ? 'text-cyan-400 bg-cyan-950/40 border-b border-cyan-400' : 'text-cyan-300/50 hover:text-cyan-300'
+          }`}
+          data-testid="tab-control"
+        >
+          <ShieldCheck size={14} /> OS Control
+        </button>
+        <button
+          onClick={() => setActivePanel('filesystem')}
+          className={`flex items-center gap-2 px-4 py-2 text-xs font-display tracking-wider uppercase transition-all ${
+            activePanel === 'filesystem' ? 'text-cyan-400 bg-cyan-950/40 border-b border-cyan-400' : 'text-cyan-300/50 hover:text-cyan-300'
+          }`}
+          data-testid="tab-filesystem"
+        >
+          <FolderOpen size={14} /> Filesystem
+        </button>
+        <button
+          onClick={() => setActivePanel('analytics')}
+          className={`flex items-center gap-2 px-4 py-2 text-xs font-display tracking-wider uppercase transition-all ${
+            activePanel === 'analytics' ? 'text-cyan-400 bg-cyan-950/40 border-b border-cyan-400' : 'text-cyan-300/50 hover:text-cyan-300'
+          }`}
+          data-testid="tab-analytics"
+        >
+          <Zap size={14} /> Analytics
+        </button>
+        <button
+          onClick={() => setActivePanel('developer')}
+          className={`flex items-center gap-2 px-4 py-2 text-xs font-display tracking-wider uppercase transition-all ${
+            activePanel === 'developer' ? 'text-cyan-400 bg-cyan-950/40 border-b border-cyan-400' : 'text-cyan-300/50 hover:text-cyan-300'
+          }`}
+          data-testid="tab-developer"
+        >
+          <Code2 size={14} /> Developer Mode
+        </button>
+        <button
+          onClick={() => setActivePanel('gesture')}
+          className={`flex items-center gap-2 px-4 py-2 text-xs font-display tracking-wider uppercase transition-all ${
+            activePanel === 'gesture' ? 'text-cyan-400 bg-cyan-950/40 border-b border-cyan-400' : 'text-cyan-300/50 hover:text-cyan-300'
+          }`}
+          data-testid="tab-gesture"
+        >
+          <Hand size={14} /> Gesture Control
+        </button>
+        <button
+          onClick={() => setActivePanel('settings')}
+          className={`flex items-center gap-2 px-4 py-2 text-xs font-display tracking-wider uppercase transition-all ${
+            activePanel === 'settings' ? 'text-cyan-400 bg-cyan-950/40 border-b border-cyan-400' : 'text-cyan-300/50 hover:text-cyan-300'
+          }`}
+          data-testid="tab-settings"
+        >
+          <Settings size={14} /> Settings
+        </button>
+      </div>
+
+      <div className="flex-1 overflow-hidden" data-spatial-scope={activePanel}>
+        {activePanel === 'control' && <SystemControlHUD api={apiBase} token={token} />}
+        {activePanel === 'terminal' && <Terminal api={apiBase} token={token} />}
+        {activePanel === 'filesystem' && <FilesystemExplorer api={apiBase} token={token} />}
+        {activePanel === 'analytics' && <VoiceAnalyticsPanel api={apiBase} token={token} />}
+        {activePanel === 'developer' && <DevWorkspace api={apiBase} token={token} />}
+        {activePanel === 'gesture' && <GestureControlPanel api={apiBase} token={token} />}
+        {activePanel === 'settings' && <SettingsPanel api={apiBase} token={token} preferences={preferences} onPreferencesChange={onPreferencesChange} />}
+      </div>
     </div>
   );
 }

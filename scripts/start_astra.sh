@@ -5,8 +5,12 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 BACKEND_HOST="${JARVIS_HOST:-127.0.0.1}"
 BACKEND_PORT="${JARVIS_BACKEND_PORT:-8001}"
 FRONTEND_PORT="${ASTRA_FRONTEND_PORT:-3000}"
-VENV_PYTHON="$ROOT_DIR/.venv-linux/bin/python"
 LOG_DIR="${ASTRA_LOG_DIR:-/tmp/astra-runtime}"
+VENV_CANDIDATES=(
+  "$ROOT_DIR/.venv/bin/python"
+  "$ROOT_DIR/.venv-linux/bin/python"
+)
+VENV_PYTHON=""
 
 mkdir -p "$LOG_DIR" /tmp/matplotlib-astra
 
@@ -18,6 +22,19 @@ fi
 
 if [ ! -d "$ROOT_DIR/frontend/node_modules" ]; then
   echo "Missing frontend dependencies. Run: cd frontend && npm install"
+  exit 1
+fi
+
+for candidate in "${VENV_CANDIDATES[@]}"; do
+  if [ -x "$candidate" ]; then
+    VENV_PYTHON="$candidate"
+    break
+  fi
+done
+
+if [ -z "$VENV_PYTHON" ]; then
+  echo "Missing Python virtualenv. Expected one of:"
+  printf '  %s\n' "${VENV_CANDIDATES[@]}"
   exit 1
 fi
 

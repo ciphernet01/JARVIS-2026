@@ -19,7 +19,7 @@ Manual backend command:
 
 ```bash
 cd backend
-../.venv-linux/bin/uvicorn server:app --host 127.0.0.1 --port 8001
+python server.py
 ```
 
 The startup script runs the FastAPI backend on `http://127.0.0.1:8001` and the React interface on `http://localhost:3000`. The older Flask/static dashboard files are legacy only. Use the React/FastAPI stack above for active development.
