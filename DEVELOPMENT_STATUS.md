@@ -265,6 +265,12 @@ Before starting work:
   - Notes: All required files, shell syntax, distribution identity, service
     posture, release configuration, and offline runtime checks passed.
 
+- Hardened the ISO workflow to build in isolated temp directories so the Docker
+  container does not write root-owned artifacts back into the checked-out repo.
+  - Artifact upload now uses `${{ runner.temp }}/astra-iso-artifacts/`.
+  - The build log, wheelhouse manifest, ISO inspection, and QEMU serial log all
+    land in that isolated artifact directory.
+
 Next: trigger the GitHub Actions `A.S.T.R.A ISO Build and Boot` workflow and
 inspect the `ci-build.log` and `qemu-serial.log` artifacts as described in
 "Next engineering target" above.

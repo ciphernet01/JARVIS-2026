@@ -22,6 +22,9 @@ def test_iso_workflow_uses_debian_builder_and_retains_evidence():
         "iso-inspection.json",
     ):
         assert evidence in text
+    assert "$RUNNER_TEMP/astra-iso-artifacts" in text
+    assert "ASTRA_BUILD_DIR=/tmp/astra-build" in text
+    assert "ASTRA_OUTPUT_DIR=/artifacts" in text
 
 
 def test_qemu_harness_supports_persistent_ci_log():

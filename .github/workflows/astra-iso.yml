@@ -59,11 +59,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Prepare isolated artifact directory
+        run: mkdir -p "$RUNNER_TEMP/astra-iso-artifacts"
+
       - name: Build on Debian 12 and boot with QEMU
         run: |
-          mkdir -p artifacts
           docker run --privileged --rm \
             -v "$GITHUB_WORKSPACE:/workspace" \
+            -v "$RUNNER_TEMP/astra-iso-artifacts:/artifacts" \
             -w /workspace \
             debian:12-slim \
             bash -lc '
@@ -77,19 +80,20 @@ jobs:
                 qemu-system-x86 ovmf python3 python3-pip python3-venv \
                 nodejs npm git ca-certificates curl sudo
               git config --global --add safe.directory /workspace
-              dpkg-query -W > artifacts/build-host-packages.tsv
+              dpkg-query -W > /artifacts/build-host-packages.tsv
               export ASTRA_NONINTERACTIVE=1
-              export ASTRA_BUILD_DIR=/workspace/.ci-build
-              export ASTRA_OUTPUT_DIR=/workspace/artifacts
-              export ASTRA_WHEELHOUSE_DIR=/workspace/.ci-wheelhouse
-              export ASTRA_FRONTEND_BUILD_DIR=/workspace/.ci-frontend
-              ./os-distribution/build-iso.sh --non-interactive 2>&1 | tee artifacts/ci-build.log
-              cp .ci-wheelhouse/manifest.json artifacts/wheelhouse-manifest.json
-              ISO_PATH="$(find artifacts -maxdepth 1 -name "astra-os-*.iso" -print -quit)"
+              export ASTRA_BUILD_DIR=/tmp/astra-build
+              export ASTRA_OUTPUT_DIR=/artifacts
+              export ASTRA_WHEELHOUSE_DIR=/tmp/astra-wheelhouse
+              export ASTRA_FRONTEND_BUILD_DIR=/tmp/astra-frontend
+              ./os-distribution/build-iso.sh --non-interactive 2>&1 | tee /artifacts/ci-build.log
+              cp /tmp/astra-build/build.log /artifacts/ci-build.log
+              cp /tmp/astra-wheelhouse/manifest.json /artifacts/wheelhouse-manifest.json
+              ISO_PATH="$(find /artifacts -maxdepth 1 -name "astra-os-*.iso" -print -quit)"
               test -n "$ISO_PATH"
               python3 scripts/inspect_iso_payload.py "$ISO_PATH" \
-                --output artifacts/iso-inspection.json
-              ASTRA_QEMU_LOG=/workspace/artifacts/qemu-serial.log \
+                --output /artifacts/iso-inspection.json
+              ASTRA_QEMU_LOG=/artifacts/qemu-serial.log \
               ASTRA_QEMU_TIMEOUT=300 \
                 ./scripts/qemu_boot_smoke.sh "$ISO_PATH"
             '
@@ -100,7 +104,6 @@ jobs:
         with:
           name: astra-iso-${{ github.run_id }}
           path: |
-            artifacts/
-            .ci-build/build.log
+            ${{ runner.temp }}/astra-iso-artifacts/
           if-no-files-found: warn
           retention-days: 14
