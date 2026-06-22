@@ -41,6 +41,7 @@ def check_required_files() -> Check:
         ROOT / "scripts/generate_wheelhouse_manifest.py",
         ROOT / "requirements.runtime.txt",
         ROOT / "scripts/validate_runtime_imports.py",
+        ROOT / "scripts/inspect_iso_payload.py",
         ROOT / ".github/workflows/astra-iso.yml",
     ]
     missing = [str(path.relative_to(ROOT)) for path in required if not path.is_file()]

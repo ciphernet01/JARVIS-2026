@@ -11,6 +11,7 @@ def test_iso_workflow_uses_debian_builder_and_retains_evidence():
     assert "docker run --privileged" in text
     assert "./os-distribution/build-iso.sh --non-interactive" in text
     assert "./scripts/qemu_boot_smoke.sh" in text
+    assert "scripts/inspect_iso_payload.py" in text
     assert "actions/upload-artifact@v4" in text
     assert "if: always()" in text
     for evidence in (
@@ -18,6 +19,7 @@ def test_iso_workflow_uses_debian_builder_and_retains_evidence():
         "wheelhouse-manifest.json",
         "qemu-serial.log",
         "ci-build.log",
+        "iso-inspection.json",
     ):
         assert evidence in text
 

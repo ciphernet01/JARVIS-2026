@@ -14,6 +14,7 @@ on:
       - "scripts/generate_iso_provenance.py"
       - "scripts/generate_wheelhouse_manifest.py"
       - "scripts/qemu_boot_smoke.sh"
+      - "scripts/inspect_iso_payload.py"
       - "scripts/validate_runtime_imports.py"
       - "scripts/validate_distribution.py"
       - "requirements.runtime.txt"
@@ -72,6 +73,7 @@ jobs:
               apt-get install --yes --no-install-recommends \
                 live-build debootstrap grub-efi-amd64-bin grub-pc-bin \
                 mtools dosfstools xorriso squashfs-tools \
+                libarchive-tools \
                 qemu-system-x86 ovmf python3 python3-pip python3-venv \
                 nodejs npm git ca-certificates curl sudo
               git config --global --add safe.directory /workspace
@@ -85,6 +87,8 @@ jobs:
               cp .ci-wheelhouse/manifest.json artifacts/wheelhouse-manifest.json
               ISO_PATH="$(find artifacts -maxdepth 1 -name "astra-os-*.iso" -print -quit)"
               test -n "$ISO_PATH"
+              python3 scripts/inspect_iso_payload.py "$ISO_PATH" \
+                --output artifacts/iso-inspection.json
               ASTRA_QEMU_LOG=/workspace/artifacts/qemu-serial.log \
               ASTRA_QEMU_TIMEOUT=300 \
                 ./scripts/qemu_boot_smoke.sh "$ISO_PATH"

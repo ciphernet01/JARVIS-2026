@@ -20,6 +20,7 @@ sudo apt-get install --yes \
   dosfstools \
   xorriso \
   squashfs-tools \
+  libarchive-tools \
   qemu-system-x86 \
   ovmf \
   python3 \
@@ -39,6 +40,7 @@ dpkg-query -W -f='${Package}\t${Version}\n' > build-host-packages.tsv
 ```bash
 ./os-distribution/build-iso.sh --validate-only
 ASTRA_NONINTERACTIVE=1 ./os-distribution/build-iso.sh --non-interactive
+python3 scripts/inspect_iso_payload.py os-distribution/output/astra-os-YYYYMMDD.iso
 ./scripts/qemu_boot_smoke.sh os-distribution/output/astra-os-YYYYMMDD.iso
 ```
 
