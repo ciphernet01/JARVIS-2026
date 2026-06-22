@@ -257,3 +257,14 @@ Before starting work:
 4. Run the focused tests for the subsystem being changed.
 5. Update this document with completed behavior, verification, limitations,
    and the next concrete target before handing work off.
+
+## Actions performed (2026-06-22)
+
+- Ran local distribution preflight: `python3 scripts/validate_distribution.py --strict`
+  - Result: 6 passed, 0 warnings, 0 failed
+  - Notes: All required files, shell syntax, distribution identity, service
+    posture, release configuration, and offline runtime checks passed.
+
+Next: trigger the GitHub Actions `A.S.T.R.A ISO Build and Boot` workflow and
+inspect the `ci-build.log` and `qemu-serial.log` artifacts as described in
+"Next engineering target" above.
