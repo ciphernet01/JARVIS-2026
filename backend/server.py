@@ -35,7 +35,7 @@ load_dotenv()
 # Import new JARVIS core
 from core import ConfigManager, Assistant
 from modules.skills import SkillFactory
-from modules.services import DeviceManager, ServiceManager, AudioManager, CameraManager, PowerManager, NetworkManager, VoiceManager, SafetyManager, PackageManager, HardwareValidationManager, HardwareStressManager, OSPreferencesManager, SecurityAuditManager, PerformanceBaselineManager, FailoverDrillManager, ReleaseEvidenceManager, GestureManager, SystemManager
+from modules.services import get_device_manager, ServiceManager, AudioManager, CameraManager, PowerManager, NetworkManager, VoiceManager, SafetyManager, PackageManager, HardwareValidationManager, HardwareStressManager, OSPreferencesManager, SecurityAuditManager, PerformanceBaselineManager, FailoverDrillManager, ReleaseEvidenceManager, GestureManager, SystemManager
 from modules.intelligence.memory_engine import MemoryEngine
 from modules.services.proactive_service import ProactiveService
 from modules.control import ControlBrokerClient, ControlBrokerError
@@ -423,10 +423,11 @@ def _get_service_manager() -> ServiceManager:
     return _service_manager
 
 
-def _get_device_manager() -> DeviceManager:
+def _get_device_manager():
     global _device_manager
     if _device_manager is None:
-        _device_manager = DeviceManager(workspace_root=str(WORKSPACE_ROOT))
+        # Let get_device_manager decide between simulated and real implementations
+        _device_manager = get_device_manager()
     return _device_manager
 
 
