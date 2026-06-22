@@ -20,6 +20,8 @@ from .release_manifest_manager import ReleaseManifestManager, ReleaseFile, Relea
 from .release_update_manager import ReleaseUpdateManager, UpdateAction
 from .gesture_manager import GestureManager
 from .system_manager import SystemManager
+from .simulated_device_manager import SimulatedDeviceManager
+from .hal import get_device_manager
 
 # Phase 2: AI Conversation Engine
 try:
@@ -84,6 +86,8 @@ __all__ = [
     "UpdateAction",
     "GestureManager",
     "SystemManager",
+    "SimulatedDeviceManager",
+    "get_device_manager",
     "AIConversationEngine",
     "ConversationMemory",
     "IntentExtractor",
