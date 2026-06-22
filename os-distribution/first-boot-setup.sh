@@ -49,9 +49,22 @@ main() {
     
     # 2. Create directories
     log_info "Creating A.S.T.R.A directories..."
+    if ! getent group astra >/dev/null; then
+        groupadd --system astra
+    fi
+    if ! id astra >/dev/null 2>&1; then
+        useradd --system --gid astra --home-dir /var/lib/astra --create-home --shell /usr/sbin/nologin astra
+    fi
+    for group in audio video input dialout; do
+        if getent group "$group" >/dev/null; then
+            usermod --append --groups "$group" astra
+        fi
+    done
     mkdir -p "$JARVIS_CONFIG_DIR"
     mkdir -p "$JARVIS_DATA_DIR"
     mkdir -p /var/log/jarvis
+    mkdir -p /var/lib/astra/workspace
+    chown -R astra:astra /var/lib/astra
     log_success "Directories created"
     
     # 3. Python & Node dependencies
@@ -114,9 +127,11 @@ main() {
     # 9. A.S.T.R.A service setup
     log_info "Setting up A.S.T.R.A service..."
     cp "$JARVIS_HOME/os-distribution/config/jarvis.service" /etc/systemd/system/
+    cp "$JARVIS_HOME/os-distribution/config/astra-shell.service" /etc/systemd/system/
+    cp "$JARVIS_HOME/os-distribution/config/astra-control-broker.service" /etc/systemd/system/
     systemctl daemon-reload
-    systemctl enable jarvis.service
-    log_success "A.S.T.R.A service installed"
+    systemctl enable astra-control-broker.service jarvis.service astra-shell.service
+    log_success "A.S.T.R.A control broker, backend, and spatial shell services installed"
     
     # 10. Voice & Vision setup
     log_info "Voice & Vision system setup"

@@ -8,15 +8,6 @@ JARVIS_HOME="${JARVIS_HOME:-/opt/jarvis}"
 BACKEND_URL="http://localhost:${JARVIS_BACKEND_PORT:-8001}"
 LOCAL_UI="$JARVIS_HOME/frontend/build/index.html"
 ELECTRON_BIN="$JARVIS_HOME/desktop-overlay/node_modules/.bin/electron"
-BACKEND_PID=""
-
-cleanup() {
-    if [ -n "$BACKEND_PID" ] && kill -0 "$BACKEND_PID" 2>/dev/null; then
-        kill "$BACKEND_PID"
-    fi
-}
-
-trap cleanup EXIT
 
 # 1. Start X server if not running
 if ! pidof X > /dev/null; then
@@ -35,20 +26,21 @@ xset s off || true
 xset -dpms || true
 xset s noblank || true
 
-# 4. Start A.S.T.R.A backend
-cd "$JARVIS_HOME"
-python3 backend/server.py &
-BACKEND_PID=$!
-
-# 5. Wait for Backend to be ready
+# 4. Wait for the separately supervised backend service.
+attempt=0
 until curl -fsS "$BACKEND_URL/health" > /dev/null; do
+    attempt=$((attempt + 1))
+    if [ "$attempt" -ge 60 ]; then
+        echo "A.S.T.R.A backend did not become ready at $BACKEND_URL" >&2
+        exit 1
+    fi
     sleep 1
 done
 
-# 6. Ensure Biometric Reference Directory exists
-mkdir -p "$JARVIS_HOME/imagedata"
+# 5. Ensure the writable biometric directory exists.
+mkdir -p "${ASTRA_STATE_DIR:-/var/lib/astra}/imagedata"
 
-# 7. Launch the UI. Prefer Electron if a Linux build is bundled; otherwise use Firefox kiosk.
+# 6. Launch the UI. Prefer Electron if a Linux build is bundled; otherwise use Firefox kiosk.
 if [ -x "$ELECTRON_BIN" ]; then
     cd "$JARVIS_HOME/desktop-overlay"
     "$ELECTRON_BIN" . --no-sandbox --kiosk

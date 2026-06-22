@@ -1,6 +1,17 @@
 # A.S.T.R.A Operating System Distribution
 
-Complete bootable Debian-based OS for A.S.T.R.A, the Agentic Spatial Task Reasoning Architecture. The image still stages the inherited assistant runtime under `/opt/jarvis` for compatibility with existing service paths.
+Prototype bootable Debian-based environment for A.S.T.R.A, the Agentic Spatial
+Task Reasoning Architecture. The image still stages immutable application code
+under `/opt/jarvis` for compatibility, while runtime state belongs under
+`/var/lib/astra`.
+
+The distribution is currently a prototype. Use the repository-level
+`ROADMAP.md` for canonical phase gates and run the static preflight before an
+image build:
+
+```bash
+python scripts/validate_distribution.py
+```
 
 ## Architecture
 

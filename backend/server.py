@@ -38,6 +38,8 @@ from modules.skills import SkillFactory
 from modules.services import DeviceManager, ServiceManager, AudioManager, CameraManager, PowerManager, NetworkManager, VoiceManager, SafetyManager, PackageManager, HardwareValidationManager, HardwareStressManager, OSPreferencesManager, SecurityAuditManager, PerformanceBaselineManager, FailoverDrillManager, ReleaseEvidenceManager, GestureManager, SystemManager
 from modules.intelligence.memory_engine import MemoryEngine
 from modules.services.proactive_service import ProactiveService
+from modules.control import ControlBrokerClient, ControlBrokerError
+from modules.llm.local_runtime import OpenAICompatibleManager
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
@@ -218,6 +220,7 @@ _security_audit_manager: Optional[SecurityAuditManager] = None
 _performance_baseline_manager: Optional[PerformanceBaselineManager] = None
 _failover_drill_manager: Optional[FailoverDrillManager] = None
 _release_evidence_manager: Optional[ReleaseEvidenceManager] = None
+_local_runtime: Optional[OpenAICompatibleManager] = None
 _gesture_manager: Optional[GestureManager] = None
 _system_manager: Optional[SystemManager] = None
 _memory_engine: Optional[MemoryEngine] = None
@@ -334,10 +337,27 @@ def _get_system_manager() -> SystemManager:
     return _system_manager
 
 
+def _get_local_runtime() -> OpenAICompatibleManager:
+    global _local_runtime
+    if _local_runtime is None:
+        config = ConfigManager().llm
+        _local_runtime = OpenAICompatibleManager(
+            base_url=config.base_url,
+            model=config.model,
+            provider=config.provider,
+            api_key=config.api_key or "local",
+            temperature=config.temperature,
+            top_p=config.top_p,
+            timeout_seconds=config.timeout_seconds,
+            system_prompt=config.system_prompt,
+        )
+    return _local_runtime
+
+
 def _get_memory_engine() -> MemoryEngine:
     global _memory_engine
     if _memory_engine is None:
-        _memory_engine = MemoryEngine(memory_path=str(WORKSPACE_ROOT / "memory" / "intelligence" / "episodic_memory.json"))
+        _memory_engine = MemoryEngine(memory_path=str(STATE_ROOT / "memory" / "intelligence" / "episodic_memory.json"))
     return _memory_engine
 
 
@@ -357,7 +377,8 @@ def _get_assistant() -> Optional[Assistant]:
             skill_registry = SkillFactory.create_default_registry()
 
             # Setup persistence layer for the web backend (Absolute path)
-            db_path = Path(__file__).resolve().parent.parent / "jarvis.db"
+            db_path = STATE_ROOT / "jarvis.db"
+            db_path.parent.mkdir(parents=True, exist_ok=True)
             db_url = f"sqlite:///{db_path}"
             from modules.persistence import PersistenceFactory
             persistence_components = PersistenceFactory.initialize(db_url)
@@ -515,6 +536,14 @@ class ServiceActionRequest(BaseModel):
     confirmed: bool = False
 
 
+class SystemServiceActionRequest(BaseModel):
+    action: str
+    name: str
+    dry_run: bool = True
+    confirmed: bool = False
+    reason: str = ""
+
+
 class HardwareValidationRequest(BaseModel):
     label: Optional[str] = None
     notes: Optional[str] = ""
@@ -670,7 +699,9 @@ def verify_token(request: Request):
 
 
 # Operator Core
-WORKSPACE_ROOT = Path(__file__).resolve().parent.parent
+CODE_ROOT = Path(__file__).resolve().parent.parent
+WORKSPACE_ROOT = Path(os.environ.get("JARVIS_WORKSPACE", CODE_ROOT)).expanduser().resolve()
+STATE_ROOT = Path(os.environ.get("ASTRA_STATE_DIR", WORKSPACE_ROOT)).expanduser().resolve()
 GENERATED_APPS_DIR = WORKSPACE_ROOT / "generated_apps"
 
 APP_ALLOWLIST = {
@@ -2467,6 +2498,53 @@ async def os_services_action(request: ServiceActionRequest, user=Depends(verify_
             "confirmed": request.confirmed,
         },
         result.get("success", False),
+    )
+    return result
+
+
+@app.get("/api/os/control/health")
+async def os_control_health(user=Depends(verify_token)):
+    """Check the local privileged control broker without performing a mutation."""
+    try:
+        return await asyncio.to_thread(ControlBrokerClient().request, "broker.health")
+    except ControlBrokerError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+
+@app.post("/api/os/control/service")
+async def os_control_service(request: SystemServiceActionRequest, user=Depends(verify_token)):
+    """Inspect or restart an allowlisted system service through the root broker."""
+    action = request.action.strip().lower()
+    if action not in {"status", "restart"}:
+        raise HTTPException(status_code=400, detail="Only status and restart are supported")
+    if action == "restart" and request.dry_run:
+        return {
+            "ok": True,
+            "dry_run": True,
+            "action": "service.restart",
+            "params": {"name": request.name},
+            "requires_confirmation": True,
+        }
+    try:
+        result = await asyncio.to_thread(
+            ControlBrokerClient().request,
+            f"service.{action}",
+            {"name": request.name},
+            confirmed=request.confirmed,
+            reason=request.reason,
+        )
+    except ControlBrokerError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    _audit_action(
+        user,
+        f"control_service_{action}",
+        {
+            "name": request.name,
+            "dry_run": request.dry_run,
+            "confirmed": request.confirmed,
+            "broker_ok": result.get("ok", False),
+        },
+        result.get("ok", False),
     )
     return result
 

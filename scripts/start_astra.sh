@@ -14,12 +14,6 @@ VENV_PYTHON=""
 
 mkdir -p "$LOG_DIR" /tmp/matplotlib-astra
 
-if [ ! -x "$VENV_PYTHON" ]; then
-  echo "Missing Linux virtualenv at $VENV_PYTHON"
-  echo "Run: ./scripts/run_linux_tests.sh"
-  exit 1
-fi
-
 if [ ! -d "$ROOT_DIR/frontend/node_modules" ]; then
   echo "Missing frontend dependencies. Run: cd frontend && npm install"
   exit 1

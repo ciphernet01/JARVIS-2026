@@ -60,11 +60,11 @@ class LoggingConfig:
 class LLMConfig:
     """Local or remote LLM configuration"""
     enabled: bool = True
-    provider: str = "gemini"
-    model: str = "gemini-2.5-flash"
+    provider: str = "local"
+    model: str = "qwen2.5-coder:7b"
     api_key: str = ""
     fallback_provider: str = "ollama"
-    fallback_model: str = "gemma4:latest"
+    fallback_model: str = "gemini-2.5-flash"
     base_url: str = "http://localhost:11434/v1"
     temperature: float = 0.2
     top_p: float = 0.9
@@ -115,11 +115,11 @@ class ConfigManager:
             self.llm.enabled = enabled_value.lower() in {"1", "true", "yes", "on"}
 
         self.llm.provider = os.getenv("LLM_PROVIDER", self.llm.provider)
-        self.llm.model = os.getenv("GEMINI_MODEL", self.llm.model)
-        self.llm.api_key = os.getenv("GEMINI_API_KEY", self.llm.api_key)
+        self.llm.model = os.getenv("LLM_MODEL") or os.getenv("LOCAL_LLM_MODEL") or os.getenv("OLLAMA_MODEL") or os.getenv("GEMINI_MODEL", self.llm.model)
+        self.llm.api_key = os.getenv("LLM_API_KEY") or os.getenv("LOCAL_LLM_API_KEY") or os.getenv("GEMINI_API_KEY", self.llm.api_key)
         self.llm.fallback_provider = os.getenv("LLM_FALLBACK_PROVIDER", self.llm.fallback_provider)
         self.llm.fallback_model = os.getenv("OLLAMA_MODEL", self.llm.fallback_model)
-        self.llm.base_url = os.getenv("OLLAMA_BASE_URL", self.llm.base_url)
+        self.llm.base_url = os.getenv("LOCAL_LLM_BASE_URL") or os.getenv("OLLAMA_BASE_URL", self.llm.base_url)
 
         temperature = os.getenv("GEMINI_TEMPERATURE") or os.getenv("LLM_TEMPERATURE") or os.getenv("OLLAMA_TEMPERATURE")
         if temperature is not None:

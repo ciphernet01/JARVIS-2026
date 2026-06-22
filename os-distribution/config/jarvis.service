@@ -1,38 +1,62 @@
 [Unit]
 Description=A.S.T.R.A Operating System Core
 Documentation=https://astra.local/docs
-After=network-online.target sound.target
-Wants=network-online.target
+After=network-online.target sound.target astra-control-broker.service
+Wants=network-online.target astra-control-broker.service
 
 [Service]
 Type=simple
-User=root
+User=astra
+Group=astra
 WorkingDirectory=/opt/jarvis
-ExecStartPre=/usr/bin/mkdir -p /var/log/jarvis
-ExecStart=/opt/jarvis/os-distribution/jarvis-shell-session.sh
+ExecStart=/usr/bin/python3 /opt/jarvis/backend/server.py
 Restart=always
 RestartSec=5
 StandardOutput=journal
 StandardError=journal
+UMask=0077
+StateDirectory=astra
+StateDirectoryMode=0750
+RuntimeDirectory=astra
+RuntimeDirectoryMode=0750
+CacheDirectory=astra
+CacheDirectoryMode=0750
 Environment="JARVIS_HOME=/opt/jarvis"
-Environment="JARVIS_HOST=0.0.0.0"
+Environment="JARVIS_WORKSPACE=/var/lib/astra/workspace"
+Environment="ASTRA_STATE_DIR=/var/lib/astra"
+Environment="JARVIS_VOICE_TRAINING_PATH=/var/lib/astra/memory/voice/training_profile.json"
+Environment="JARVIS_HOST=127.0.0.1"
 Environment="JARVIS_BACKEND_PORT=8001"
+Environment="ASTRA_CONTROL_SOCKET=/run/astra-control/control.sock"
 Environment="PYTHONUNBUFFERED=1"
 Environment="MONGO_URL=mongodb://localhost:27017"
 Environment="DB_NAME=jarvis"
 
 # Security hardening
 PrivateTmp=yes
-NoNewPrivileges=false
-ProtectSystem=no
-ProtectHome=no
-ProtectKernelTunables=no
-ProtectControlGroups=no
-RestrictRealtime=no
-RestrictNamespaces=no
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+ProtectProc=invisible
+ProcSubset=pid
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
+RestrictNamespaces=yes
+LockPersonality=yes
+MemoryDenyWriteExecute=yes
+CapabilityBoundingSet=
+AmbientCapabilities=
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+SystemCallArchitectures=native
 
 # Allow audio/camera/hardware access
 SupplementaryGroups=audio video input dialout
 
 [Install]
-WantedBy=graphical.target
+WantedBy=multi-user.target

@@ -95,7 +95,9 @@ preflight_payload() {
         "$payload/backend/server.py" \
         "$payload/frontend/build/index.html" \
         "$payload/os-distribution/jarvis-shell-session.sh" \
-        "$payload/os-distribution/config/jarvis.service"; do
+        "$payload/os-distribution/config/jarvis.service" \
+        "$payload/os-distribution/config/astra-shell.service" \
+        "$payload/os-distribution/config/astra-control-broker.service"; do
         if [ ! -f "$required" ]; then
             log_error "Missing required payload file: ${required#$payload/}"
             blocked=$((blocked + 1))
@@ -219,7 +221,7 @@ configure_live_build() {
         --iso-application "A.S.T.R.A OS" \
         --iso-volume "ASTRA_OS" \
         --linux-flavours generic \
-        --security false
+        --security true
     
     log_success "Live-build configured"
 }
@@ -254,15 +256,35 @@ set -e
 JARVIS_INSTALL_DIR="/opt/jarvis"
 mkdir -p "$JARVIS_INSTALL_DIR"
 
+# Create the unprivileged runtime identity and writable state root.
+if ! getent group astra >/dev/null; then
+    groupadd --system astra
+fi
+if ! id astra >/dev/null 2>&1; then
+    useradd --system --gid astra --home-dir /var/lib/astra --create-home --shell /usr/sbin/nologin astra
+fi
+for group in audio video input dialout; do
+    if getent group "$group" >/dev/null; then
+        usermod --append --groups "$group" astra
+    fi
+done
+install -d -o astra -g astra -m 0750 /var/lib/astra /var/lib/astra/workspace
+
 echo "A.S.T.R.A payload staged at $JARVIS_INSTALL_DIR"
 
 # Install systemd service
 if [ -f "$JARVIS_INSTALL_DIR/os-distribution/config/jarvis.service" ]; then
     cp "$JARVIS_INSTALL_DIR/os-distribution/config/jarvis.service" /etc/systemd/system/
-    systemctl daemon-reload
-    systemctl enable jarvis.service
-    echo "A.S.T.R.A service enabled"
 fi
+if [ -f "$JARVIS_INSTALL_DIR/os-distribution/config/astra-shell.service" ]; then
+    cp "$JARVIS_INSTALL_DIR/os-distribution/config/astra-shell.service" /etc/systemd/system/
+fi
+if [ -f "$JARVIS_INSTALL_DIR/os-distribution/config/astra-control-broker.service" ]; then
+    cp "$JARVIS_INSTALL_DIR/os-distribution/config/astra-control-broker.service" /etc/systemd/system/
+fi
+systemctl daemon-reload
+systemctl enable astra-control-broker.service jarvis.service astra-shell.service
+echo "A.S.T.R.A control broker, backend, and spatial shell services enabled"
 
 # Set up voice shell
 if [ -f "$JARVIS_INSTALL_DIR/os-distribution/jarvis-shell" ]; then
@@ -316,7 +338,6 @@ create_checksums() {
     
     for iso in *.iso; do
         sha256sum "$iso" > "$iso.sha256"
-        md5sum "$iso" > "$iso.md5"
     done
     
     log_success "Checksums created"
