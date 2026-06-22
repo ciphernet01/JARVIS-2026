@@ -2,7 +2,7 @@
 # A.S.T.R.A OS ISO Builder
 # Builds bootable Debian live-build ISO with A.S.T.R.A integrated.
 
-set -e
+set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BUILD_DIR="${ASTRA_BUILD_DIR:-$SCRIPT_DIR/build}"
@@ -10,6 +10,29 @@ OUTPUT_DIR="${ASTRA_OUTPUT_DIR:-$SCRIPT_DIR/output}"
 CONFIG_DIR="$SCRIPT_DIR/config"
 JARVIS_HOME="$SCRIPT_DIR/.."
 FRONTEND_BUILD_DIR="${ASTRA_FRONTEND_BUILD_DIR:-${TMPDIR:-/tmp}/astra-frontend-build}"
+WHEELHOUSE_DIR="${ASTRA_WHEELHOUSE_DIR:-${TMPDIR:-/tmp}/astra-wheelhouse}"
+NON_INTERACTIVE="${ASTRA_NONINTERACTIVE:-0}"
+VALIDATE_ONLY=0
+ISO_PATH=""
+
+usage() {
+    cat <<'EOF'
+Usage: ./build-iso.sh [--non-interactive] [--validate-only]
+
+  --non-interactive  Run without the confirmation prompt (for CI).
+  --validate-only    Run repository distribution validation without build tools.
+EOF
+}
+
+while [ "$#" -gt 0 ]; do
+    case "$1" in
+        --non-interactive) NON_INTERACTIVE=1 ;;
+        --validate-only) VALIDATE_ONLY=1 ;;
+        -h|--help) usage; exit 0 ;;
+        *) echo "Unknown argument: $1" >&2; usage >&2; exit 2 ;;
+    esac
+    shift
+done
 
 # Colors
 RED='\033[0;31m'
@@ -35,7 +58,7 @@ check_requirements() {
     
     local missing=0
     
-    for cmd in live-build lb debootstrap; do
+    for cmd in lb debootstrap npm python3 sha256sum tar; do
         if ! command -v "$cmd" &> /dev/null; then
             log_error "$cmd not found"
             missing=$((missing + 1))
@@ -44,12 +67,33 @@ check_requirements() {
     
     if [ $missing -gt 0 ]; then
         log_error "Missing $missing required tools"
-        echo "Install with: sudo apt-get install live-build debootstrap"
+        echo "See os-distribution/BUILD_HOST.md for the pinned build-host setup."
+        return 1
+    fi
+
+    if [ "$(python3 -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")')" != "3.11" ]; then
+        log_error "The Debian 12 image wheelhouse must be resolved with Python 3.11"
+        echo "Use the Debian 12 build host documented in os-distribution/BUILD_HOST.md."
         return 1
     fi
     
     log_success "All requirements met"
     return 0
+}
+
+build_python_wheelhouse() {
+    log_info "Resolving the offline Python runtime wheelhouse..."
+    rm -rf "$WHEELHOUSE_DIR"
+    mkdir -p "$WHEELHOUSE_DIR"
+    python3 -m pip download \
+        --disable-pip-version-check \
+        --only-binary=:all: \
+        --dest "$WHEELHOUSE_DIR" \
+        --requirement "$JARVIS_HOME/requirements.runtime.txt"
+    python3 "$JARVIS_HOME/scripts/generate_wheelhouse_manifest.py" \
+        "$WHEELHOUSE_DIR" \
+        "$WHEELHOUSE_DIR/manifest.json"
+    log_success "Offline Python wheelhouse resolved"
 }
 
 build_frontend_assets() {
@@ -97,7 +141,9 @@ preflight_payload() {
         "$payload/os-distribution/jarvis-shell-session.sh" \
         "$payload/os-distribution/config/jarvis.service" \
         "$payload/os-distribution/config/astra-shell.service" \
-        "$payload/os-distribution/config/astra-control-broker.service"; do
+        "$payload/os-distribution/config/astra-control-broker.service" \
+        "$payload/os-distribution/config/astra-boot-ready.service" \
+        "$payload/os-distribution/astra-boot-ready.sh"; do
         if [ ! -f "$required" ]; then
             log_error "Missing required payload file: ${required#$payload/}"
             blocked=$((blocked + 1))
@@ -155,6 +201,7 @@ prepare_environment() {
     mkdir -p "$BUILD_DIR/config"
     mkdir -p "$BUILD_DIR/config/package-lists"
     mkdir -p "$BUILD_DIR/config/includes.chroot/opt/jarvis"
+    mkdir -p "$BUILD_DIR/config/includes.chroot/opt/astra/wheelhouse"
     mkdir -p "$OUTPUT_DIR"
     
     # Copy configuration
@@ -189,6 +236,7 @@ prepare_environment() {
     rm -rf "$BUILD_DIR/config/includes.chroot/opt/jarvis/frontend/build"
     mkdir -p "$BUILD_DIR/config/includes.chroot/opt/jarvis/frontend/build"
     cp -a "$FRONTEND_BUILD_DIR/." "$BUILD_DIR/config/includes.chroot/opt/jarvis/frontend/build/"
+    cp -a "$WHEELHOUSE_DIR/." "$BUILD_DIR/config/includes.chroot/opt/astra/wheelhouse/"
 
     preflight_payload || return 1
     
@@ -220,7 +268,8 @@ configure_live_build() {
         --firmware-chroot true \
         --iso-application "A.S.T.R.A OS" \
         --iso-volume "ASTRA_OS" \
-        --linux-flavours generic \
+        --linux-flavours amd64 \
+        --bootappend-live "boot=live components console=tty0 console=ttyS0,115200n8 systemd.show_status=yes" \
         --security true
     
     log_success "Live-build configured"
@@ -256,6 +305,17 @@ set -e
 JARVIS_INSTALL_DIR="/opt/jarvis"
 mkdir -p "$JARVIS_INSTALL_DIR"
 
+# Install the application runtime entirely from the build-time wheelhouse.
+python3 -m venv /opt/astra/venv
+/opt/astra/venv/bin/python -m pip install \
+    --disable-pip-version-check \
+    --no-index \
+    --find-links /opt/astra/wheelhouse \
+    --requirement "$JARVIS_INSTALL_DIR/requirements.runtime.txt"
+install -d -m 0755 /usr/share/doc/astra
+cp /opt/astra/wheelhouse/manifest.json /usr/share/doc/astra/wheelhouse-manifest.json
+rm -rf /opt/astra/wheelhouse
+
 # Create the unprivileged runtime identity and writable state root.
 if ! getent group astra >/dev/null; then
     groupadd --system astra
@@ -282,9 +342,13 @@ fi
 if [ -f "$JARVIS_INSTALL_DIR/os-distribution/config/astra-control-broker.service" ]; then
     cp "$JARVIS_INSTALL_DIR/os-distribution/config/astra-control-broker.service" /etc/systemd/system/
 fi
+if [ -f "$JARVIS_INSTALL_DIR/os-distribution/config/astra-boot-ready.service" ]; then
+    cp "$JARVIS_INSTALL_DIR/os-distribution/config/astra-boot-ready.service" /etc/systemd/system/
+fi
+chmod +x "$JARVIS_INSTALL_DIR/os-distribution/astra-boot-ready.sh"
 systemctl daemon-reload
-systemctl enable astra-control-broker.service jarvis.service astra-shell.service
-echo "A.S.T.R.A control broker, backend, and spatial shell services enabled"
+systemctl enable astra-control-broker.service jarvis.service astra-shell.service astra-boot-ready.service
+echo "A.S.T.R.A control broker, backend, spatial shell, and boot marker enabled"
 
 # Set up voice shell
 if [ -f "$JARVIS_INSTALL_DIR/os-distribution/jarvis-shell" ]; then
@@ -318,11 +382,18 @@ build_iso() {
     
     cd "$BUILD_DIR"
     
-    # Mount /proc and /sys for debootstrap
-    sudo lb build 2>&1 | tee build.log
+    # Mount /proc and /sys for debootstrap. CI must provide passwordless sudo or run as root.
+    if [ "$(id -u)" -eq 0 ]; then
+        lb build 2>&1 | tee build.log
+    elif [ "$NON_INTERACTIVE" = "1" ]; then
+        sudo -n lb build 2>&1 | tee build.log
+    else
+        sudo lb build 2>&1 | tee build.log
+    fi
     
     if [ -f live-image-amd64.hybrid.iso ]; then
-        mv live-image-amd64.hybrid.iso "$OUTPUT_DIR/astra-os-$(date +%Y%m%d).iso"
+        ISO_PATH="$OUTPUT_DIR/astra-os-$(date +%Y%m%d).iso"
+        mv live-image-amd64.hybrid.iso "$ISO_PATH"
         log_success "ISO image created"
         return 0
     else
@@ -343,7 +414,16 @@ create_checksums() {
     log_success "Checksums created"
 }
 
+create_provenance() {
+    log_info "Creating build provenance..."
+    python3 "$JARVIS_HOME/scripts/generate_iso_provenance.py" "$ISO_PATH"
+    log_success "Build provenance created"
+}
+
 main() {
+    if [ "$VALIDATE_ONLY" = "1" ]; then
+        exec python3 "$JARVIS_HOME/scripts/validate_distribution.py" --strict
+    fi
     echo -e "${BLUE}"
     echo "╔════════════════════════════════════════════════════╗"
     echo "║    A.S.T.R.A OS ISO Builder                        ║"
@@ -355,24 +435,28 @@ main() {
     # Run build steps
     check_requirements || exit 1
     build_frontend_assets || exit 1
+    build_python_wheelhouse || exit 1
     prepare_environment || exit 1
     configure_live_build || exit 1
     add_packages || exit 1
     add_jarvis_integration || exit 1
     
-    echo -e "\n${YELLOW}Ready to build ISO${NC}"
-    echo "This requires root/sudo and will take 10-30 minutes"
-    echo ""
-    echo "Continue (y/n)?"
-    read -r CONTINUE
-    
-    if [[ "$CONTINUE" != "y" && "$CONTINUE" != "Y" ]]; then
-        log_info "Build cancelled"
-        exit 0
+    if [ "$NON_INTERACTIVE" != "1" ]; then
+        echo -e "\n${YELLOW}Ready to build ISO${NC}"
+        echo "This requires root/sudo and will take 10-30 minutes"
+        echo ""
+        echo "Continue (y/n)?"
+        read -r CONTINUE
+
+        if [[ "$CONTINUE" != "y" && "$CONTINUE" != "Y" ]]; then
+            log_info "Build cancelled"
+            exit 0
+        fi
     fi
     
     build_iso || exit 1
     create_checksums
+    create_provenance
     
     echo ""
     echo -e "${GREEN}"

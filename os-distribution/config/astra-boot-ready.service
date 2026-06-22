@@ -1,0 +1,16 @@
+[Unit]
+Description=A.S.T.R.A Boot Readiness Marker
+After=astra-control-broker.service jarvis.service
+Requires=astra-control-broker.service jarvis.service
+
+[Service]
+Type=oneshot
+ExecStart=/opt/jarvis/os-distribution/astra-boot-ready.sh
+RemainAfterExit=yes
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+
+[Install]
+WantedBy=multi-user.target

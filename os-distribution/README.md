@@ -80,6 +80,13 @@ chmod +x build-iso.sh
 ./build-iso.sh
 ```
 
+For CI and boot validation, see `BUILD_HOST.md`. The non-interactive path is:
+
+```bash
+ASTRA_NONINTERACTIVE=1 ./build-iso.sh --non-interactive
+../scripts/qemu_boot_smoke.sh output/astra-os-YYYYMMDD.iso
+```
+
 Production rollout gates are tracked in `PRODUCTION_READINESS.md`.
 
 ### Installation

@@ -1,0 +1,101 @@
+name: A.S.T.R.A ISO Build and Boot
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/astra-iso.yml"
+      - "backend/**"
+      - "core/**"
+      - "modules/**"
+      - "frontend/**"
+      - "os-distribution/**"
+      - "scripts/generate_iso_provenance.py"
+      - "scripts/generate_wheelhouse_manifest.py"
+      - "scripts/qemu_boot_smoke.sh"
+      - "scripts/validate_distribution.py"
+      - "requirements.runtime.txt"
+  pull_request:
+    paths:
+      - ".github/workflows/astra-iso.yml"
+      - "os-distribution/**"
+      - "scripts/**"
+      - "requirements.runtime.txt"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: astra-iso-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install focused test dependencies
+        run: python -m pip install pytest requests
+      - name: Validate distribution and build scripts
+        run: ./os-distribution/build-iso.sh --validate-only
+      - name: Run build-pipeline unit tests
+        run: |
+          python -m pytest -q \
+            tests/test_distribution_preflight.py \
+            tests/test_iso_provenance.py \
+            tests/test_wheelhouse_manifest.py
+
+  build-and-boot:
+    needs: validate
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build on Debian 12 and boot with QEMU
+        run: |
+          mkdir -p artifacts
+          docker run --privileged --rm \
+            -v "$GITHUB_WORKSPACE:/workspace" \
+            -w /workspace \
+            debian:12-slim \
+            bash -lc '
+              set -euo pipefail
+              export DEBIAN_FRONTEND=noninteractive
+              apt-get update
+              apt-get install --yes --no-install-recommends \
+                live-build debootstrap grub-efi-amd64-bin grub-pc-bin \
+                mtools dosfstools xorriso squashfs-tools \
+                qemu-system-x86 ovmf python3 python3-pip python3-venv \
+                nodejs npm git ca-certificates curl sudo
+              git config --global --add safe.directory /workspace
+              dpkg-query -W > artifacts/build-host-packages.tsv
+              export ASTRA_NONINTERACTIVE=1
+              export ASTRA_BUILD_DIR=/workspace/.ci-build
+              export ASTRA_OUTPUT_DIR=/workspace/artifacts
+              export ASTRA_WHEELHOUSE_DIR=/workspace/.ci-wheelhouse
+              export ASTRA_FRONTEND_BUILD_DIR=/workspace/.ci-frontend
+              ./os-distribution/build-iso.sh --non-interactive 2>&1 | tee artifacts/ci-build.log
+              cp .ci-wheelhouse/manifest.json artifacts/wheelhouse-manifest.json
+              ISO_PATH="$(find artifacts -maxdepth 1 -name "astra-os-*.iso" -print -quit)"
+              test -n "$ISO_PATH"
+              ASTRA_QEMU_LOG=/workspace/artifacts/qemu-serial.log \
+              ASTRA_QEMU_TIMEOUT=300 \
+                ./scripts/qemu_boot_smoke.sh "$ISO_PATH"
+            '
+
+      - name: Upload build and boot evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: astra-iso-${{ github.run_id }}
+          path: |
+            artifacts/
+            .ci-build/build.log
+          if-no-files-found: warn
+          retention-days: 14

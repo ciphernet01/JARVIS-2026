@@ -10,15 +10,19 @@ A.S.T.R.A, the Agentic Spatial Task Reasoning Architecture, is packaged as a Deb
    - `bash -n os-distribution/build-iso.sh`
    - `bash -n os-distribution/jarvis-shell-session.sh`
    - `bash -n os-distribution/first-boot-setup.sh`
+   - `python scripts/validate_distribution.py --strict`
 
 2. ISO build validation
+   - Run `.github/workflows/astra-iso.yml` on the exact release commit.
    - Build on a Debian or Ubuntu machine with `live-build`, `debootstrap`, and `grub-efi-amd64`.
    - Confirm output name matches `astra-os-YYYYMMDD.iso`.
    - Verify generated `.sha256` checksum before writing media.
+   - Retain the generated `.iso.provenance.json` and build-host package inventory.
 
 3. Boot validation
    - Boot in UEFI mode on at least one clean test PC and one virtual machine.
    - Confirm graphical session starts, backend reaches `/api/health`, and the A.S.T.R.A UI opens.
+   - Run `scripts/qemu_boot_smoke.sh` and capture the `ASTRA_BOOT_READY` marker.
    - Confirm keyboard, network, audio output, microphone input, camera, sleep, restart, and shutdown behavior.
 
 4. Security validation

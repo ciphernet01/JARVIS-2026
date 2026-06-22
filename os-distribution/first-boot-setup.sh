@@ -41,11 +41,9 @@ main() {
     echo "╚════════════════════════════════════════════════════╝"
     echo -e "${NC}"
     
-    # 1. System Updates
-    log_info "Checking for system updates..."
-    apt-get update -qq
-    apt-get upgrade -y -qq
-    log_success "System packages updated"
+    # 1. Release integrity
+    log_info "Using the package set embedded in this signed image."
+    log_info "System updates are handled after enrollment by the A.S.T.R.A update workflow."
     
     # 2. Create directories
     log_info "Creating A.S.T.R.A directories..."
@@ -67,18 +65,14 @@ main() {
     chown -R astra:astra /var/lib/astra
     log_success "Directories created"
     
-    # 3. Python & Node dependencies
-    log_info "Installing system dependencies..."
-    cd "$JARVIS_HOME" || exit 1
-    pip3 install -q -r requirements.txt
-    pip3 install -q openai-whisper ollama mediapipe pyautogui
-
-    log_info "Installing Neural Shell (Electron) dependencies..."
-    if [ -d "$JARVIS_HOME/desktop-overlay" ]; then
-        cd "$JARVIS_HOME/desktop-overlay"
-        npm install --quiet
+    # 3. Verify the image-local runtime. First boot must not download code.
+    log_info "Verifying the image-local A.S.T.R.A runtime..."
+    if [ ! -x /opt/astra/venv/bin/python ]; then
+        log_error "Missing /opt/astra/venv; the image runtime is incomplete"
+        exit 1
     fi
-    log_success "Dependencies installed (including AI/Vision/HUD layers)"
+    /opt/astra/venv/bin/python -c "import fastapi, uvicorn, cv2, mediapipe, openai"
+    log_success "Offline runtime verified"
     
     # 4. Database initialization
     log_info "Initializing A.S.T.R.A database..."
@@ -129,18 +123,17 @@ main() {
     cp "$JARVIS_HOME/os-distribution/config/jarvis.service" /etc/systemd/system/
     cp "$JARVIS_HOME/os-distribution/config/astra-shell.service" /etc/systemd/system/
     cp "$JARVIS_HOME/os-distribution/config/astra-control-broker.service" /etc/systemd/system/
+    cp "$JARVIS_HOME/os-distribution/config/astra-boot-ready.service" /etc/systemd/system/
     systemctl daemon-reload
-    systemctl enable astra-control-broker.service jarvis.service astra-shell.service
-    log_success "A.S.T.R.A control broker, backend, and spatial shell services installed"
+    systemctl enable astra-control-broker.service jarvis.service astra-shell.service astra-boot-ready.service
+    log_success "A.S.T.R.A control broker, backend, spatial shell, and boot marker installed"
     
     # 10. Voice & Vision setup
     log_info "Voice & Vision system setup"
     echo -e "${YELLOW}"
     echo "A.S.T.R.A uses voice recognition and hand gestures for interaction."
-    echo "Downloading Whisper base model for offline speech recognition..."
-    # Pre-download Whisper model to avoid delay on first use
-    python3 -c "import whisper; whisper.load_model('base')"
-    echo "Local AI Core (Ollama) will be configured for optimal performance."
+    echo "Optional speech and local-model assets can be installed later from signed A.S.T.R.A packages."
+    echo "First boot performs no network code or model downloads."
     echo -e "${NC}"
     
     # 11. Completion

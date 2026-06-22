@@ -33,6 +33,14 @@ def check_required_files() -> Check:
         DIST / "config/jarvis.service",
         DIST / "config/astra-shell.service",
         DIST / "config/astra-control-broker.service",
+        DIST / "config/astra-boot-ready.service",
+        DIST / "astra-boot-ready.sh",
+        DIST / "BUILD_HOST.md",
+        ROOT / "scripts/qemu_boot_smoke.sh",
+        ROOT / "scripts/generate_iso_provenance.py",
+        ROOT / "scripts/generate_wheelhouse_manifest.py",
+        ROOT / "requirements.runtime.txt",
+        ROOT / ".github/workflows/astra-iso.yml",
     ]
     missing = [str(path.relative_to(ROOT)) for path in required if not path.is_file()]
     if missing:
@@ -46,7 +54,9 @@ def check_shell_syntax() -> Check:
         DIST / "boot-init.sh",
         DIST / "first-boot-setup.sh",
         DIST / "jarvis-shell-session.sh",
+        DIST / "astra-boot-ready.sh",
         ROOT / "scripts/start_astra.sh",
+        ROOT / "scripts/qemu_boot_smoke.sh",
     ]
     failures: list[str] = []
     for script in scripts:
@@ -129,12 +139,39 @@ def check_release_configuration() -> Check:
     return Check("release_configuration", "pass", "Release configuration has no known weak defaults")
 
 
+def check_offline_runtime() -> Check:
+    unit = (DIST / "config/jarvis.service").read_text(encoding="utf-8")
+    first_boot = (DIST / "first-boot-setup.sh").read_text(encoding="utf-8")
+    builder = (DIST / "build-iso.sh").read_text(encoding="utf-8")
+    failures = []
+    if "ExecStart=/opt/astra/venv/bin/python" not in unit:
+        failures.append("backend does not use /opt/astra/venv")
+    if "--no-index" not in builder or "requirements.runtime.txt" not in builder:
+        failures.append("builder does not enforce offline wheel installation")
+    forbidden = ("pip3 install", "pip install", "npm install", "apt-get update", "apt-get upgrade")
+    found = [command for command in forbidden if command in first_boot]
+    if found:
+        failures.append("first boot contains network installers: " + ", ".join(found))
+    if failures:
+        return Check("offline_runtime", "fail", "; ".join(failures))
+    return Check(
+        "offline_runtime",
+        "pass",
+        "Backend uses the image-local venv and first boot performs no package downloads",
+    )
+
+
 def run_checks() -> list[Check]:
     checks = [check_required_files(), check_shell_syntax()]
     if checks[0].status == "fail":
         return checks
     checks.extend(
-        [check_distribution_identity(), check_service_posture(), check_release_configuration()]
+        [
+            check_distribution_identity(),
+            check_service_posture(),
+            check_release_configuration(),
+            check_offline_runtime(),
+        ]
     )
     return checks
 

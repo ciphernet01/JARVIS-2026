@@ -26,6 +26,7 @@ def test_distribution_preflight_reports_machine_readable_results():
         "distribution_identity",
         "service_posture",
         "release_configuration",
+        "offline_runtime",
     }
 
 

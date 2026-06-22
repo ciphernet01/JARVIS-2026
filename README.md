@@ -2,6 +2,12 @@
 
 A.S.T.R.A is the production OS direction for this repository: a Debian-based, bootable spatial assistant environment that builds on the existing JARVIS runtime. Internal package paths and API headers may still use `jarvis` names for compatibility while the product-facing distribution moves to A.S.T.R.A.
 
+## Developer Handoff
+
+- Current implementation and next task: `DEVELOPMENT_STATUS.md`
+- Canonical OS phase gates: `ROADMAP.md`
+- Distribution-specific operator material: `os-distribution/README.md`
+
 ## Canonical Web Stack
 
 A.S.T.R.A uses one active web setup:
@@ -26,7 +32,9 @@ The startup script runs the FastAPI backend on `http://127.0.0.1:8001` and the R
 
 ## Overview
 
-This is the modernized, production-ready version of JARVIS with a clean modular architecture, separating concerns into distinct, testable components.
+This repository is an active A.S.T.R.A OS prototype with a modular JARVIS-derived
+runtime. Release readiness must be judged from the canonical roadmap and saved
+verification evidence, not historical phase-completion labels.
 
 **Latest Updates (Phase 3 Complete):**
 - ✅ Modular architecture with separation of concerns

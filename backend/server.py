@@ -698,6 +698,13 @@ def verify_token(request: Request):
     return SESSION_TOKENS[token]
 
 
+@app.get("/api/ai/runtime")
+async def ai_runtime_capabilities(user=Depends(verify_token)):
+    """Report the configured local inference runtime and its advertised models."""
+    capabilities = await asyncio.to_thread(_get_local_runtime().capabilities)
+    return capabilities.to_dict()
+
+
 # Operator Core
 CODE_ROOT = Path(__file__).resolve().parent.parent
 WORKSPACE_ROOT = Path(os.environ.get("JARVIS_WORKSPACE", CODE_ROOT)).expanduser().resolve()

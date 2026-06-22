@@ -9,7 +9,7 @@ Type=simple
 User=astra
 Group=astra
 WorkingDirectory=/opt/jarvis
-ExecStart=/usr/bin/python3 /opt/jarvis/backend/server.py
+ExecStart=/opt/astra/venv/bin/python /opt/jarvis/backend/server.py
 Restart=always
 RestartSec=5
 StandardOutput=journal
@@ -36,6 +36,7 @@ Environment="DB_NAME=jarvis"
 PrivateTmp=yes
 NoNewPrivileges=yes
 ProtectSystem=strict
+ReadOnlyPaths=/opt/astra/venv
 ProtectHome=yes
 ProtectKernelTunables=yes
 ProtectKernelModules=yes

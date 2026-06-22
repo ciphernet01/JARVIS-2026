@@ -20,8 +20,9 @@ class LocalRuntimeCapabilities:
     reachable: bool
     configured_model: str
     available_models: List[str]
+    configured_model_available: bool
     openai_compatible: bool = True
-    tool_calling: bool = True
+    tool_calling: Optional[bool] = None
 
     def to_dict(self) -> Dict[str, Any]:
         return asdict(self)
@@ -80,6 +81,7 @@ class OpenAICompatibleManager:
             reachable=reachable,
             configured_model=self.model,
             available_models=models,
+            configured_model_available=self.model in models,
         )
 
     def is_available(self) -> bool:

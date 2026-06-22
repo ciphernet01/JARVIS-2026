@@ -4,6 +4,9 @@ This is the canonical implementation roadmap for the Debian-based A.S.T.R.A
 operating environment. Historical `PHASE*.md` files describe earlier JARVIS
 application work; they are evidence, not the OS release plan.
 
+For the current implementation snapshot, verification commands, known gaps,
+and next developer handoff, read `DEVELOPMENT_STATUS.md`.
+
 ## Engineering principles
 
 - Build on the supported Debian Linux kernel before considering custom patches.
@@ -26,6 +29,10 @@ Deliverables:
 Gate: `python scripts/validate_distribution.py` and focused tests pass on Debian.
 
 ## Phase 1 — Bootable Debian image
+
+Status: active. Non-interactive build controls, provenance generation, serial
+readiness marker, and QEMU smoke harness exist; an actual clean-host build and
+boot artifact are still required.
 
 Deliverables:
 
