@@ -84,6 +84,7 @@ jobs:
               export ASTRA_NONINTERACTIVE=1
               export ASTRA_BUILD_DIR=/tmp/astra-build
               export ASTRA_OUTPUT_DIR=/artifacts
+              export ASTRA_FRONTEND_STAGING_DIR=/tmp/astra-frontend-staging
               export ASTRA_WHEELHOUSE_DIR=/tmp/astra-wheelhouse
               export ASTRA_FRONTEND_BUILD_DIR=/tmp/astra-frontend
               ./os-distribution/build-iso.sh --non-interactive 2>&1 | tee /artifacts/ci-build.log

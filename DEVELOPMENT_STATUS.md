@@ -270,6 +270,8 @@ Before starting work:
   - Artifact upload now uses `${{ runner.temp }}/astra-iso-artifacts/`.
   - The build log, wheelhouse manifest, ISO inspection, and QEMU serial log all
     land in that isolated artifact directory.
+  - Frontend dependency installation now happens in a temporary staging copy,
+    so `npm ci` and the build output do not touch the mounted repository tree.
 
 Next: trigger the GitHub Actions `A.S.T.R.A ISO Build and Boot` workflow and
 inspect the `ci-build.log` and `qemu-serial.log` artifacts as described in

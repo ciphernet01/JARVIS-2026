@@ -10,6 +10,7 @@ OUTPUT_DIR="${ASTRA_OUTPUT_DIR:-$SCRIPT_DIR/output}"
 CONFIG_DIR="$SCRIPT_DIR/config"
 JARVIS_HOME="$SCRIPT_DIR/.."
 FRONTEND_BUILD_DIR="${ASTRA_FRONTEND_BUILD_DIR:-${TMPDIR:-/tmp}/astra-frontend-build}"
+FRONTEND_STAGING_DIR="${ASTRA_FRONTEND_STAGING_DIR:-${TMPDIR:-/tmp}/astra-frontend-staging}"
 WHEELHOUSE_DIR="${ASTRA_WHEELHOUSE_DIR:-${TMPDIR:-/tmp}/astra-wheelhouse}"
 NON_INTERACTIVE="${ASTRA_NONINTERACTIVE:-0}"
 VALIDATE_ONLY=0
@@ -110,12 +111,15 @@ build_frontend_assets() {
     fi
 
     mkdir -p "$OUTPUT_DIR"
-    pushd "$JARVIS_HOME/frontend" > /dev/null
-    if [ -d node_modules ] && [ ! -w node_modules ]; then
-        log_info "frontend/node_modules is not writable; using existing dependencies"
-    else
-        npm ci
-    fi
+    rm -rf "$FRONTEND_STAGING_DIR"
+    mkdir -p "$FRONTEND_STAGING_DIR"
+    tar -C "$JARVIS_HOME/frontend" \
+        --exclude "node_modules" \
+        --exclude "build" \
+        -cf - . | tar -C "$FRONTEND_STAGING_DIR" -xf -
+
+    pushd "$FRONTEND_STAGING_DIR" > /dev/null
+    npm ci
     rm -rf "$FRONTEND_BUILD_DIR"
     DISABLE_ESLINT_PLUGIN=true BUILD_PATH="$FRONTEND_BUILD_DIR" REACT_APP_BACKEND_URL="http://localhost:8001" npm run build
     popd > /dev/null
