@@ -49,7 +49,7 @@ timeout "$TIMEOUT_SECONDS" qemu-system-x86_64 \
 QEMU_STATUS=${PIPESTATUS[0]}
 set -e
 
-if grep -q "ASTRA_BOOT_READY broker=active backend=active" "$LOG_FILE"; then
+if python3 "$(dirname "$0")/check_boot_ready_log.py" "$LOG_FILE"; then
     echo "A.S.T.R.A QEMU boot smoke passed"
     exit 0
 fi

@@ -273,6 +273,10 @@ Before starting work:
   - Frontend dependency installation now happens in a temporary staging copy,
     so `npm ci` and the build output do not touch the mounted repository tree.
 
+  - Added a dedicated QEMU boot-marker parser helper,
+    `scripts/check_boot_ready_log.py`, so the serial smoke test no longer depends
+    on a single brittle grep path.
+
 Next: trigger the GitHub Actions `A.S.T.R.A ISO Build and Boot` workflow and
 inspect the `ci-build.log` and `qemu-serial.log` artifacts as described in
 "Next engineering target" above.
