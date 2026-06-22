@@ -13,7 +13,6 @@ cryptography>=43.0
 aiofiles>=24.1
 numpy>=1.26
 opencv-python-headless>=4.10
-mediapipe>=0.10.14
 Pillow>=10.4
 pyttsx3>=2.90
 SpeechRecognition>=3.10

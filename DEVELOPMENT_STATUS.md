@@ -114,6 +114,19 @@ Important boundaries:
 - Concurrency cancellation prevents obsolete builds for the same branch from
   consuming the full ISO build window.
 
+### Runtime capability isolation
+
+- Added an image-time critical import smoke test; an ISO build now fails before
+  packaging if the backend's required Python modules cannot import.
+- The smoke report distinguishes boot-critical dependencies from optional
+  perception/interaction capabilities.
+- MediaPipe, Whisper, Torch, and PyAutoGUI no longer belong to the core image
+  boot contract. Their absence degrades the corresponding feature without
+  preventing the backend and control plane from starting.
+- Removed MediaPipe from the core wheelhouse to avoid conflicting OpenCV wheel
+  distributions. It should return later as a separately versioned perception
+  package after clean-image testing.
+
 ## Verification snapshot
 
 Last successful focused verification:
@@ -207,6 +220,8 @@ the inference-server license.
   produced a successful remote build artifact in this development session.
 - The wheelhouse uses constrained direct requirements plus an artifact hash
   manifest; a reviewed fully pinned transitive lock remains desirable.
+- Optional perception packages are not yet split into signed Debian/add-on
+  artifacts; only the core-runtime boundary has been defined.
 - The control broker only manages A.S.T.R.A service status/restart; package,
   network, power, and hardware mutations remain outside the broker until their
   policies and rollback behavior are defined.

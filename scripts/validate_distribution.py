@@ -40,6 +40,7 @@ def check_required_files() -> Check:
         ROOT / "scripts/generate_iso_provenance.py",
         ROOT / "scripts/generate_wheelhouse_manifest.py",
         ROOT / "requirements.runtime.txt",
+        ROOT / "scripts/validate_runtime_imports.py",
         ROOT / ".github/workflows/astra-iso.yml",
     ]
     missing = [str(path.relative_to(ROOT)) for path in required if not path.is_file()]
@@ -148,6 +149,8 @@ def check_offline_runtime() -> Check:
         failures.append("backend does not use /opt/astra/venv")
     if "--no-index" not in builder or "requirements.runtime.txt" not in builder:
         failures.append("builder does not enforce offline wheel installation")
+    if "validate_runtime_imports.py" not in builder:
+        failures.append("builder does not smoke-test the installed runtime")
     forbidden = ("pip3 install", "pip install", "npm install", "apt-get update", "apt-get upgrade")
     found = [command for command in forbidden if command in first_boot]
     if found:

@@ -14,6 +14,7 @@ on:
       - "scripts/generate_iso_provenance.py"
       - "scripts/generate_wheelhouse_manifest.py"
       - "scripts/qemu_boot_smoke.sh"
+      - "scripts/validate_runtime_imports.py"
       - "scripts/validate_distribution.py"
       - "requirements.runtime.txt"
   pull_request:

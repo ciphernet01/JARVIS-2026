@@ -315,6 +315,8 @@ python3 -m venv /opt/astra/venv
 install -d -m 0755 /usr/share/doc/astra
 cp /opt/astra/wheelhouse/manifest.json /usr/share/doc/astra/wheelhouse-manifest.json
 rm -rf /opt/astra/wheelhouse
+/opt/astra/venv/bin/python "$JARVIS_INSTALL_DIR/scripts/validate_runtime_imports.py" \
+    --json > /usr/share/doc/astra/runtime-smoke.json
 
 # Create the unprivileged runtime identity and writable state root.
 if ! getent group astra >/dev/null; then

@@ -71,7 +71,8 @@ main() {
         log_error "Missing /opt/astra/venv; the image runtime is incomplete"
         exit 1
     fi
-    /opt/astra/venv/bin/python -c "import fastapi, uvicorn, cv2, mediapipe, openai"
+    /opt/astra/venv/bin/python "$JARVIS_HOME/scripts/validate_runtime_imports.py" --json \
+        > /var/lib/astra/runtime-smoke.json
     log_success "Offline runtime verified"
     
     # 4. Database initialization
