@@ -1,0 +1,686 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>A.S.T.R.A OS — LinkedIn Content Calendar</title>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg-main: #050505;
+    --bg-glass: rgba(25, 25, 35, 0.4);
+    --bg-glass-hover: rgba(40, 40, 55, 0.6);
+    --border-glass: rgba(255, 255, 255, 0.08);
+    --border-glass-hover: rgba(255, 255, 255, 0.2);
+    --text-primary: #ffffff;
+    --text-secondary: #a0a0b0;
+    --text-tertiary: #707080;
+    --accent: #00f0ff;
+    --accent-glow: rgba(0, 240, 255, 0.4);
+    --radius-sm: 8px;
+    --radius-md: 12px;
+    --radius-lg: 16px;
+    --font: 'Outfit', sans-serif;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  
+  body { 
+    font-family: var(--font); 
+    background-color: var(--bg-main);
+    background-image: 
+      radial-gradient(circle at 15% 50%, rgba(0, 240, 255, 0.05), transparent 25%),
+      radial-gradient(circle at 85% 30%, rgba(180, 0, 255, 0.05), transparent 25%);
+    color: var(--text-primary);
+    min-height: 100vh;
+    padding: 3rem 1rem;
+    line-height: 1.6;
+    overflow-x: hidden;
+  }
+
+  .container {
+    max-width: 900px;
+    margin: 0 auto;
+  }
+
+  .header { 
+    text-align: center;
+    margin-bottom: 3rem; 
+    animation: fadeInDown 0.8s ease-out;
+  }
+  
+  .header h1 { 
+    font-size: 2.5rem; 
+    font-weight: 700; 
+    background: linear-gradient(90deg, #fff, #a0a0b0);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    letter-spacing: -0.02em;
+    margin-bottom: 0.5rem;
+  }
+  
+  .header p { 
+    font-size: 1.1rem; 
+    color: var(--text-secondary); 
+    font-weight: 300;
+  }
+
+  .phase-nav { 
+    display: flex; 
+    flex-wrap: wrap; 
+    gap: 10px; 
+    margin-bottom: 3rem; 
+    justify-content: center;
+    animation: fadeInUp 0.8s ease-out 0.2s both;
+  }
+
+  .phase-btn { 
+    font-family: var(--font);
+    font-size: 0.95rem; 
+    font-weight: 500;
+    padding: 10px 20px; 
+    background: var(--bg-glass);
+    backdrop-filter: blur(12px);
+    border: 1px solid var(--border-glass); 
+    border-radius: 30px; 
+    color: var(--text-secondary); 
+    cursor: pointer; 
+    transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+    box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+  }
+
+  .phase-btn:hover { 
+    background: var(--bg-glass-hover); 
+    color: var(--text-primary);
+    border-color: var(--border-glass-hover);
+    transform: translateY(-2px);
+    box-shadow: 0 6px 12px rgba(0,0,0,0.2);
+  }
+
+  .phase-btn.active { 
+    background: rgba(0, 240, 255, 0.1); 
+    color: var(--accent); 
+    border-color: var(--accent); 
+    box-shadow: 0 0 15px var(--accent-glow);
+  }
+
+  .phase-block { 
+    margin-bottom: 2rem; 
+  }
+
+  .phase-header { 
+    display: flex; 
+    align-items: center; 
+    gap: 15px; 
+    margin-bottom: 2rem; 
+    padding-bottom: 1rem;
+    border-bottom: 1px solid var(--border-glass);
+    animation: fadeIn 0.5s ease-out;
+  }
+
+  .phase-badge { 
+    font-size: 0.85rem; 
+    font-weight: 600; 
+    padding: 6px 14px; 
+    border-radius: 20px; 
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+  }
+
+  .phase-title { 
+    font-size: 1.4rem; 
+    font-weight: 600; 
+    color: var(--text-primary); 
+  }
+
+  .phase-meta { 
+    font-size: 0.95rem; 
+    color: var(--text-tertiary); 
+    margin-left: auto; 
+    font-weight: 400;
+  }
+
+  .posts-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 1.5rem;
+  }
+
+  .post-card { 
+    background: var(--bg-glass);
+    backdrop-filter: blur(16px);
+    border: 1px solid var(--border-glass); 
+    border-radius: var(--radius-lg); 
+    padding: 2rem; 
+    transition: all 0.4s cubic-bezier(0.25, 0.8, 0.25, 1);
+    opacity: 0;
+    transform: translateY(20px);
+    animation: slideUpFade 0.6s ease-out forwards;
+  }
+  
+  .post-card:hover {
+    background: var(--bg-glass-hover);
+    border-color: var(--border-glass-hover);
+    transform: translateY(-5px) !important;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.3), 0 0 20px rgba(255,255,255,0.02) inset;
+  }
+
+  .post-day { 
+    display: inline-block;
+    font-size: 0.8rem; 
+    font-weight: 600; 
+    color: var(--accent); 
+    text-transform: uppercase; 
+    letter-spacing: 0.1em; 
+    margin-bottom: 1rem; 
+    background: rgba(0, 240, 255, 0.1);
+    padding: 4px 10px;
+    border-radius: 4px;
+  }
+
+  .post-hook { 
+    font-size: 1.3rem; 
+    font-weight: 600; 
+    color: var(--text-primary); 
+    margin-bottom: 1rem; 
+    line-height: 1.4; 
+  }
+
+  .post-body { 
+    font-size: 1rem; 
+    color: var(--text-secondary); 
+    line-height: 1.8; 
+    margin-bottom: 1.5rem; 
+  }
+
+  .post-tags { 
+    display: flex; 
+    flex-wrap: wrap; 
+    gap: 8px; 
+    margin-bottom: 1.5rem; 
+  }
+
+  .tag { 
+    font-size: 0.85rem; 
+    padding: 4px 12px; 
+    border-radius: 20px; 
+    background: rgba(255, 255, 255, 0.05);
+    color: var(--text-secondary);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    transition: all 0.2s ease;
+  }
+  
+  .tag:hover {
+    background: rgba(255, 255, 255, 0.1);
+    color: var(--text-primary);
+  }
+
+  .post-actions { 
+    display: flex; 
+    gap: 12px; 
+    border-top: 1px solid var(--border-glass);
+    padding-top: 1.5rem;
+  }
+
+  .post-actions button { 
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-family: var(--font);
+    font-size: 0.95rem; 
+    font-weight: 500;
+    padding: 8px 20px; 
+    background: transparent;
+    color: var(--text-primary);
+    border: 1px solid var(--border-glass);
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    transition: all 0.2s ease;
+  }
+
+  .post-actions button:hover {
+    background: rgba(255, 255, 255, 0.1);
+    border-color: rgba(255, 255, 255, 0.3);
+  }
+  
+  .post-actions button svg {
+    width: 16px;
+    height: 16px;
+    fill: currentColor;
+  }
+  
+  @keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+  
+  @keyframes fadeInDown {
+    from { opacity: 0; transform: translateY(-20px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  
+  @keyframes fadeInUp {
+    from { opacity: 0; transform: translateY(20px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  
+  @keyframes slideUpFade {
+    to { opacity: 1; transform: translateY(0); }
+  }
+</style>
+</head>
+<body>
+
+<div class="container">
+  <div class="header">
+    <h1>A.S.T.R.A OS</h1>
+    <p>Phase-by-Phase LinkedIn Content Calendar</p>
+  </div>
+
+  <div class="phase-nav" id="nav"></div>
+  <div id="posts"></div>
+</div>
+
+<script>
+const phases = [
+  {
+    id: 0,
+    name: "Phase 0",
+    label: "Baseline",
+    color: "background: linear-gradient(135deg, #4b5563, #1f2937); color: #fff;",
+    days: "Days 1–3",
+    posts: [
+      {
+        day: "Day 1",
+        hook: "I'm building an AI operating system from scratch. Here's why, and what that even means.",
+        body: `Six months ago I asked: what if the AI assistant wasn't just an app — but the OS itself?\n\nMeet A.S.T.R.A — an Adaptive System for Task Reasoning and Automation.\n\nBuilt on Debian Linux. Powered by a local-first agentic runtime. Designed to think, plan, and act — not just respond.\n\nPhase 0 starts today: reproducible baseline, clean entrypoint, honest separation between what's built and what's planned.\n\nNo hype. Just engineering.\n\n→ github.com/ciphernet01/JARVIS-2026`,
+        tags: ["#BuildInPublic", "#OpenSource", "#AIEngineering", "#Linux"]
+      },
+      {
+        day: "Day 2",
+        hook: "Why Debian? The architectural decision that everything else depends on.",
+        body: `Every OS starts with a kernel decision. For A.S.T.R.A, that means Debian stable.\n\nHere's the reasoning:\n• Reproducible builds via live-build\n• Pinned packages — no surprise dependency drift\n• Decades of hardening on security-critical paths\n• APT ecosystem means we can ship our own .deb packages\n\nThe agent runtime sits unprivileged on top. A narrow authenticated policy broker mediates any privileged call. Defense in depth from day one.\n\nSome call it boring. I call it production-grade.\n\n#SystemsDesign #Linux #ASTRA`,
+        tags: ["#SystemsDesign", "#Linux", "#ASTRA", "#BuildInPublic"]
+      },
+      {
+        day: "Day 3",
+        hook: "Phase 0 gate cleared: validation passes, stack is pinned, build is reproducible.",
+        body: `Phase 0 complete.\n\nWhat that actually means:\n✓ React/FastAPI dev entrypoint canonicalized\n✓ Python deps pinned, frontend lockfile committed\n✓ Shell syntax validation passing in CI\n✓ validate_distribution.py passes clean on Debian\n\nThis sounds boring. It isn't. A reproducible baseline is the only honest foundation for the phases ahead — bootable image, runtime packaging, privileged control plane, hardware abstraction, and beyond.\n\nYou can't build a house without surveying the land first.\n\nPhase 1 starts tomorrow. 🔧`,
+        tags: ["#ASTRA", "#CI", "#DevLog", "#BuildInPublic"]
+      }
+    ]
+  },
+  {
+    id: 1,
+    name: "Phase 1",
+    label: "Bootable image",
+    color: "background: linear-gradient(135deg, #0ea5e9, #0369a1); color: #fff;",
+    days: "Days 4–7",
+    posts: [
+      {
+        day: "Day 4",
+        hook: "Today I build the ISO. A.S.T.R.A boots for the first time.",
+        body: `Phase 1: from code to bootable Debian image.\n\nThe target: a reproducible live-build config that boots in QEMU — both BIOS and UEFI — without any manual steps.\n\nWhat goes in:\n• A.S.T.R.A kernel command line and systemd targets\n• Recovery entry in the bootloader\n• SHA-256 manifest + build provenance for every image\n\nThe gate: a clean builder runs, spins an ISO, boots in QEMU, reaches multi-user.target. Automated. Documented. Reproducible by anyone.\n\nThis is where it stops being a project and starts being an OS.`,
+        tags: ["#ASTRA", "#Linux", "#SystemsBuild", "#BuildInPublic"]
+      },
+      {
+        day: "Day 5",
+        hook: "Reproducible builds are a superpower. Here's exactly how we do it.",
+        body: `Two builders. Same source. Byte-identical ISOs.\n\nThat's the standard A.S.T.R.A Phase 1 targets.\n\nThe stack: live-build + pinned Debian release + SHA-256 manifest. Every artifact has traceable provenance — who built it, when, from what inputs.\n\nWhy does this matter for an AI OS?\n\nIf you can't trust your base image, you can't trust anything the agent does on top of it. Security starts at the bootloader.\n\n#ReproducibleBuilds #Linux #Security #ASTRA`,
+        tags: ["#ReproducibleBuilds", "#Linux", "#Security", "#ASTRA"]
+      },
+      {
+        day: "Day 6",
+        hook: "QEMU smoke test passed. A.S.T.R.A reaches multi-user.target.",
+        body: `The VM boots.\n\nA.S.T.R.A image, spun from a clean builder, reaches multi-user.target in QEMU without manual intervention.\n\nThis is the Phase 1 acceptance gate. It's automated — not "I ran it and it worked" but "CI runs it and it works every time."\n\nNext: the systemd units that bring the agent runtime online at boot. Because an OS that doesn't start its own brain at startup isn't an AI OS — it's just Linux with extra steps.\n\nPhase 2 queued. 🚀`,
+        tags: ["#ASTRA", "#QEMU", "#Linux", "#DevLog"]
+      },
+      {
+        day: "Day 7",
+        hook: "Week 1 retrospective: what building an OS in public actually looks like.",
+        body: `One week in. Here's the honest picture:\n\n✓ Reproducible baseline (Phase 0)\n✓ Bootable Debian image passing QEMU smoke tests (Phase 1)\n\nWhat I didn't expect:\n→ How much CI discipline pays off immediately\n→ How much the "boring" decisions (pinned deps, provenance manifests) reduce cognitive load later\n→ How different building an OS feels vs building an app\n\nMost software floats on top of the OS. We're building the platform everything else runs on. That changes how you think about every decision.\n\nThread continues next week with Phase 2: core runtime packaging.`,
+        tags: ["#BuildInPublic", "#ASTRA", "#WeeklyRetrospective", "#OpenSource"]
+      }
+    ]
+  },
+  {
+    id: 2,
+    name: "Phase 2",
+    label: "Runtime packaging",
+    color: "background: linear-gradient(135deg, #10b981, #047857); color: #fff;",
+    days: "Days 8–11",
+    posts: [
+      {
+        day: "Day 8",
+        hook: "We're shipping .deb packages. The A.S.T.R.A runtime gets a proper Debian home.",
+        body: `Phase 2: packaging the OS runtime as proper Debian packages.\n\nThis isn't just bundling — it means:\n• Dedicated system user for the agent runtime (unprivileged)\n• Immutable application files, writable state dirs separated\n• Upgrade and rollback scripts with migration handling\n• Separate systemd units: backend, spatial-shell, first-boot\n\nWhy .deb? Because APT gives us a tested, auditable upgrade path. Rolling your own installer is how you get upgrade-induced data loss.\n\nEngineering principle: every mutating capability must be reversible where possible. That starts here.`,
+        tags: ["#Debian", "#Packaging", "#ASTRA", "#SystemsEngineering"]
+      },
+      {
+        day: "Day 9",
+        hook: "Immutable app files. Writable state dirs. Why this separation is everything.",
+        body: `One of the most important design decisions in A.S.T.R.A:\n\n/usr/lib/astra → immutable. Owned by root. The agent cannot modify itself.\n/var/lib/astra → writable. Owned by the astra system user. State, memory, runtime data.\n\nThis isn't pedantry. This is the line between an auditable system and an agent that can silently modify its own behavior.\n\nIf the agent is compromised, it cannot rewrite its own binary. The audit log is append-only. Safe mode is always accessible.\n\nTrustworthy AI systems require trustworthy OS design.`,
+        tags: ["#AISafety", "#SystemsDesign", "#ASTRA", "#Linux"]
+      },
+      {
+        day: "Day 10",
+        hook: "Install. Upgrade. Rollback. Purge. Phase 2 gate cleared in a disposable VM.",
+        body: `Four-command lifecycle test, passing clean:\n\n$ apt install astra-runtime ✓\n$ apt upgrade astra-runtime ✓\n$ astra-rollback --to=previous ✓\n$ apt purge astra-runtime ✓\n\nEvery step validated in a throwaway Debian VM. No state pollution. No leftover files. Clean slate confirmed.\n\nThis is what production-grade packaging looks like. Not "it works on my machine" — but "a fresh VM with nothing but Debian can install, upgrade, roll back, and remove cleanly."\n\nPhase 2 gate: cleared. Phase 3 next.`,
+        tags: ["#ASTRA", "#Debian", "#DevLog", "#BuildInPublic"]
+      },
+      {
+        day: "Day 11",
+        hook: "The systemd unit that starts an AI brain at boot. How we designed it.",
+        body: `Three systemd units run A.S.T.R.A at boot:\n\n1. astra-backend.service — the FastAPI reasoning core\n2. astra-spatial-shell.service — spatial interaction layer\n3. astra-first-boot.service — runs once, sets up user enrollment\n\nOrdering matters. The backend waits for the network. The shell waits for the backend. First-boot waits for the shell.\n\nFailure semantics: the agent fails safe. If the backend doesn't start, the shell doesn't launch. No partial state.\n\nThis is what "boot-to-AI" looks like at the OS layer.`,
+        tags: ["#systemd", "#Linux", "#ASTRA", "#SystemsEngineering"]
+      }
+    ]
+  },
+  {
+    id: 3,
+    name: "Phase 3",
+    label: "Control plane",
+    color: "background: linear-gradient(135deg, #f59e0b, #b45309); color: #fff;",
+    days: "Days 12–15",
+    posts: [
+      {
+        day: "Day 12",
+        hook: "The agent has no root. Here's how we give it power without giving it control.",
+        body: `Phase 3: the privileged control plane.\n\nA.S.T.R.A's agent runtime has zero root privileges. It never will.\n\nInstead, all privileged operations — package installs, service restarts, network changes, power management — go through an authenticated broker. The broker:\n\n• Validates the caller's identity\n• Checks RBAC/polkit policy\n• Requests human confirmation for high-risk actions\n• Logs every event to an append-only audit stream\n\nThe agent is powerful. But the OS retains control.\n\nThis is the architecture that makes agentic AI safe to run at the OS level.`,
+        tags: ["#AISafety", "#ASTRA", "#Linux", "#Security"]
+      },
+      {
+        day: "Day 13",
+        hook: "Deny by default. Every privilege must be explicitly granted.",
+        body: `A.S.T.R.A's control plane is deny-by-default.\n\nNothing is permitted unless a policy rule explicitly says so. The policy is:\n• Role-based (RBAC): what can this identity do?\n• Action-based (polkit): what confirmation does this action require?\n• Audited: every grant and denial is logged\n\nHigh-risk actions — system-wide package installs, network reconfiguration, power commands — require explicit human confirmation. Not a checkbox. A deliberate, logged consent event.\n\nAI that can act on your behalf must be AI you can hold accountable.`,
+        tags: ["#Security", "#ASTRA", "#AISafety", "#PolicyDesign"]
+      },
+      {
+        day: "Day 14",
+        hook: "Emergency safe mode: what happens when the agent goes wrong.",
+        body: `Every system has failure modes. A.S.T.R.A is designed for its.\n\nIf the agent runtime misbehaves — runaway resource use, policy violations, unexpected mutations — safe mode activates:\n\n→ Agent runtime suspended\n→ All pending actions cancelled\n→ Audit log sealed and preserved\n→ System drops to a read-only diagnostic shell\n→ Recovery requires human authentication\n\nThis isn't a fallback. It's a first-class feature. An AI OS without a safe mode isn't safe — it's just fast.\n\nPhase 3 gate: agent has no root, cannot bypass the broker. Verified.`,
+        tags: ["#ASTRA", "#AISafety", "#SystemsDesign", "#BuildInPublic"]
+      },
+      {
+        day: "Day 15",
+        hook: "Mid-build retrospective: what 2 weeks of OS engineering has taught me.",
+        body: `Two weeks. Three phases cleared.\n\nThings I've learned building A.S.T.R.A:\n\n1. The "boring" decisions compound. Pinned deps → reproducible builds → trusted images → safe upgrades. One disciplines flows into the next.\n\n2. AI safety is a systems problem, not a model problem. The model's safety depends on what the OS lets it do.\n\n3. Gateable phases force honest progress. "Phase 3 complete" means the acceptance test passes — not "I think it's mostly done."\n\nBuilding in public keeps me honest. Thank you for following.\n\nPhase 4 next: hardware abstraction.`,
+        tags: ["#BuildInPublic", "#ASTRA", "#Retrospective", "#AIEngineering"]
+      }
+    ]
+  },
+  {
+    id: 4,
+    name: "Phase 4",
+    label: "HAL",
+    color: "background: linear-gradient(135deg, #ec4899, #be185d); color: #fff;",
+    days: "Days 16–19",
+    posts: [
+      {
+        day: "Day 16",
+        hook: "Building HAL — the hardware abstraction layer that makes A.S.T.R.A hardware-agnostic.",
+        body: `Phase 4: the Hardware Abstraction Layer.\n\nA.S.T.R.A needs to run on diverse hardware — different GPUs, input devices, audio systems, sensors. The HAL is how we make that possible without rewriting the agent for each target.\n\nThe design:\n• Versioned contract: adapters implement a stable API\n• Simulated adapter: tests run without real hardware\n• Linux adapters: input, audio, video, storage, network, power, sensors, GPUs\n\nCapability discovery at boot. Hot-plug events during runtime. Timeout and fault containment on every adapter.\n\nThe agent sees a clean API. The complexity lives in the adapters.`,
+        tags: ["#HAL", "#Linux", "#ASTRA", "#SystemsEngineering"]
+      },
+      {
+        day: "Day 17",
+        hook: "Why we test hardware in simulation before touching real devices.",
+        body: `A.S.T.R.A's HAL ships with a simulated adapter.\n\nEvery hardware contract test runs against the sim first. Real hardware comes second.\n\nWhy? Because:\n→ CI can't attach a GPU or a microphone\n→ Simulation catches contract violations before they brick a device\n→ New hardware targets only need an adapter, not a test rewrite\n\nThe acceptance gate: contract tests pass in simulation AND on the supported hardware matrix.\n\nBoth gates must clear. Simulation is not a substitute for real hardware — it's a pre-filter that makes real hardware testing cheaper.`,
+        tags: ["#Testing", "#HAL", "#ASTRA", "#Linux"]
+      },
+      {
+        day: "Day 18",
+        hook: "Hot-plug events: how A.S.T.R.A handles hardware that appears and disappears at runtime.",
+        body: `Plug in a webcam. A.S.T.R.A sees it in under a second.\n\nThe HAL's hot-plug architecture:\n1. udev event fires\n2. HAL adapter detects capability change\n3. Agent runtime receives a typed capability event\n4. Planner can now route tasks to the new device\n\nDisconnect the webcam mid-task? The adapter emits a removal event. The planner marks the capability unavailable. The task fails gracefully — no crash, no hung process.\n\nFault containment is a feature, not an afterthought.`,
+        tags: ["#ASTRA", "#Linux", "#HAL", "#FaultTolerance"]
+      },
+      {
+        day: "Day 19",
+        hook: "Phase 4 cleared. A.S.T.R.A talks to hardware through a clean, versioned contract.",
+        body: `Phase 4 gate: contract tests passing in simulation and on target hardware.\n\nWhat A.S.T.R.A can now do:\n✓ Discover hardware capabilities at boot\n✓ Receive hot-plug events at runtime\n✓ Route tasks to the right adapter\n✓ Contain faults without crashing the agent\n\nThe abstraction layer means tomorrow's hardware support is an adapter, not a rewrite.\n\nPhase 5 next: the agentic operating runtime — where A.S.T.R.A starts actually thinking.`,
+        tags: ["#ASTRA", "#BuildInPublic", "#HAL", "#OpenSource"]
+      }
+    ]
+  },
+  {
+    id: 5,
+    name: "Phase 5",
+    label: "Agentic runtime",
+    color: "background: linear-gradient(135deg, #8b5cf6, #5b21b6); color: #fff;",
+    days: "Days 20–24",
+    posts: [
+      {
+        day: "Day 20",
+        hook: "Phase 5: A.S.T.R.A starts thinking. Introducing the agentic operating runtime.",
+        body: `This is the phase I've been building toward.\n\nPhase 5: planner/executor separation, durable tasks, cancellation, budgets, retries — the engine that makes A.S.T.R.A an agent, not just an assistant.\n\nThe architecture:\n• Planner: decomposes goals into actions\n• Executor: runs actions, returns typed results\n• Task store: durable — survives reboots\n• Budget system: every task has resource and time limits\n• Retry policy: exponential backoff with circuit breaking\n\nThe planner doesn't know how actions run. The executor doesn't know why. Separation of concerns at the cognitive layer.`,
+        tags: ["#AgenticAI", "#ASTRA", "#AIEngineering", "#BuildInPublic"]
+      },
+      {
+        day: "Day 21",
+        hook: "Local-first model routing: why A.S.T.R.A runs inference on-device by default.",
+        body: `A.S.T.R.A routes to local models first. Cloud is a fallback, not the default.\n\nWhy:\n→ Your data doesn't leave your device for routine tasks\n→ Works offline\n→ Latency is deterministic — no network jitter in the reasoning loop\n→ Cost scales with hardware, not API calls\n\nThe routing layer:\n1. Task arrives\n2. Capability check: can a local model handle this?\n3. If yes → local inference\n4. If no → escalate to configured cloud provider\n\nMemory governance and provenance tracking apply to every inference call. The agent knows where its knowledge came from.`,
+        tags: ["#LocalAI", "#ASTRA", "#Privacy", "#AIEngineering"]
+      },
+      {
+        day: "Day 22",
+        hook: "Durable tasks: why A.S.T.R.A doesn't forget what it was doing when you reboot.",
+        body: `Most assistants lose context on restart. A.S.T.R.A doesn't.\n\nDurable task design:\n• Every task is serialized to disk before execution begins\n• Checkpoints written at each completed action\n• On boot, the task store is replayed — incomplete tasks resume\n• Cancelled tasks emit a clean cancellation event, not an error\n\nThis matters for long-running infrastructure tasks — package updates, file organization, scheduled jobs. You can restart the machine. The work continues.\n\nReliability isn't a feature layer. It's a foundational property.`,
+        tags: ["#ASTRA", "#Reliability", "#AgenticAI", "#SystemsDesign"]
+      },
+      {
+        day: "Day 23",
+        hook: "Multi-agent orchestration on a single machine. How A.S.T.R.A coordinates specialized agents.",
+        body: `A.S.T.R.A doesn't run one monolithic agent. It runs a coordinated set.\n\nEach agent has:\n• A declared identity\n• A constrained capability scope\n• Policy-gated communication channels\n\nThe orchestrator assigns tasks to the appropriate specialist. A vision agent processes the webcam. A planning agent decomposes the goal. A tool agent executes the action.\n\nThey don't share memory directly. Communication is typed, logged, and policy-mediated.\n\nMulti-agent systems are powerful. They're also attack surfaces. Policy constraints apply to inter-agent calls as strictly as they apply to user requests.`,
+        tags: ["#MultiAgent", "#AISafety", "#ASTRA", "#AIEngineering"]
+      },
+      {
+        day: "Day 24",
+        hook: "Phase 5 gate: representative infrastructure tasks complete safely under injected failures.",
+        body: `Phase 5 acceptance test: run real infrastructure tasks. Inject failures mid-execution. Verify safe behavior.\n\nWe injected:\n• Disk full mid-task → task paused, user notified, no data loss\n• Network drop during model call → retry with backoff, local fallback activated\n• Agent process kill → task resumed from last checkpoint on restart\n\nAll three: safe termination, clean state, correct audit log.\n\nThis is what "safely" means in the acceptance gate. Not "didn't crash." Correct behavior under adversarial conditions.\n\nPhase 6 next: spatial interaction — voice, vision, gestures.`,
+        tags: ["#ASTRA", "#FaultTolerance", "#BuildInPublic", "#AgenticAI"]
+      }
+    ]
+  },
+  {
+    id: 6,
+    name: "Phase 6",
+    label: "Spatial UI",
+    color: "background: linear-gradient(135deg, #14b8a6, #0f766e); color: #fff;",
+    days: "Days 25–28",
+    posts: [
+      {
+        day: "Day 25",
+        hook: "Phase 6: A.S.T.R.A gets a face. Voice, vision, and spatial interaction.",
+        body: `The OS can plan. The OS can act. Now it needs to listen, see, and speak.\n\nPhase 6: spatial interaction environment.\n\nWhat we're building:\n• Boot-to-shell user session — no desktop, no taskbar, just A.S.T.R.A\n• Voice input/output — full conversation, not just commands\n• Vision — camera feed processed locally\n• Gesture recognition — spatial controls\n• Accessible keyboard fallback — voice is an enhancement, not a requirement\n\nExplicit consent indicators for every sensor. The user always knows when the camera or microphone is active. No dark patterns in an AI OS.`,
+        tags: ["#ASTRA", "#HCI", "#Voice", "#AIEngineering"]
+      },
+      {
+        day: "Day 26",
+        hook: "Consent by design: how A.S.T.R.A handles sensor access.",
+        body: `A.S.T.R.A's spatial layer activates sensors with explicit, visible consent indicators.\n\nThe design:\n• Camera active → persistent LED indicator in the shell\n• Microphone active → visual waveform indicator\n• Sensor data does not leave the device without a user-confirmed policy rule\n• User enrollment is per-device, not per-cloud-account\n\nWe're at a moment where AI systems are normalizing ambient sensing. A.S.T.R.A takes the opposite position: every sensor access is visible, logged, and revocable.\n\nTransparency is a design requirement, not a compliance checkbox.`,
+        tags: ["#Privacy", "#ASTRA", "#AISafety", "#HCI"]
+      },
+      {
+        day: "Day 27",
+        hook: "User enrollment: how A.S.T.R.A learns who you are — locally.",
+        body: `First boot. A.S.T.R.A meets you.\n\nEnrollment flow:\n1. Identity setup — local account, no cloud login required\n2. Preference configuration — voice, accessibility, language\n3. Sensor consent — explicit opt-in for each sensor\n4. Capability introduction — what can A.S.T.R.A do on your behalf?\n\nAll preferences stored locally. Encrypted. Per-user.\n\nSecure per-user preferences means two people on the same machine get completely separate agent contexts, memory, and permission scopes.\n\nYour AI. Your device. Your data.`,
+        tags: ["#Privacy", "#ASTRA", "#UserExperience", "#Linux"]
+      },
+      {
+        day: "Day 28",
+        hook: "Phase 6 gate: end-to-end interaction tests pass without cloud connectivity.",
+        body: `Offline. No internet. Full A.S.T.R.A interaction session.\n\nThe Phase 6 gate requires end-to-end interaction tests without cloud connectivity. Every feature must work locally.\n\n✓ Voice → intent → action → voice response\n✓ Camera → face recognition → personalized session\n✓ Keyboard fallback → full functionality\n✓ Sensor consent flows → logged and honoured\n\nCloud connectivity is an enhancement. Local capability is the baseline.\n\nPhase 7 next: infrastructure fabric — multiple nodes, fleet management, and distributed A.S.T.R.A.`,
+        tags: ["#ASTRA", "#LocalAI", "#BuildInPublic", "#Privacy"]
+      }
+    ]
+  },
+  {
+    id: 7,
+    name: "Phase 7",
+    label: "Fleet fabric",
+    color: "background: linear-gradient(135deg, #eab308, #a16207); color: #fff;",
+    days: "Days 29–32",
+    posts: [
+      {
+        day: "Day 29",
+        hook: "Phase 7: A.S.T.R.A scales to a fleet. One OS, many nodes.",
+        body: `Single-node A.S.T.R.A is a powerful personal AI OS. Phase 7 makes it an infrastructure fabric.\n\nWhat we're building:\n• Enrolled-node identity — every machine has a cryptographic identity\n• Inventory — the controller knows what's in the fleet\n• Remote execution — push tasks to any enrolled node\n• Scheduling — place work where resources are available\n• Secrets delivery — keys and credentials, distributed securely\n• Policy distribution — one policy change, fleet-wide effect\n\nOffline behavior is a first-class requirement. Nodes that lose controller contact continue operating safely within cached policy.`,
+        tags: ["#Infrastructure", "#ASTRA", "#DistributedSystems", "#AIEngineering"]
+      },
+      {
+        day: "Day 30",
+        hook: "Quorum rules: how A.S.T.R.A handles controller failure.",
+        body: `What happens when the A.S.T.R.A controller goes offline?\n\nThe answer can't be "everything stops."\n\nQuorum rules define how many nodes must agree before executing high-consequence actions. If the controller is unreachable:\n\n→ Read operations continue\n→ Cached policy governs local execution\n→ High-risk mutations are deferred, not silently dropped\n→ Fleet recovery procedures activate automatically\n\nDistributed systems fail. The question is whether they fail safely.\n\nA.S.T.R.A's fleet is designed for graceful degradation, not point-of-failure collapse.`,
+        tags: ["#DistributedSystems", "#ASTRA", "#Reliability", "#Infrastructure"]
+      },
+      {
+        day: "Day 31",
+        hook: "Telemetry in an AI OS: what we collect, why, and what we never touch.",
+        body: `A.S.T.R.A collects telemetry. Here's exactly what and why.\n\nWe collect:\n• Structured operational events — task starts, completions, failures\n• Resource utilization — per-node CPU, memory, storage\n• Policy evaluations — what was allowed, what was denied\n\nWe do not collect:\n• Task content — what you asked the agent to do\n• Conversation transcripts\n• Sensor data of any kind\n\nTelemetry is for fleet health. Not user profiling. The audit log is yours. The operational metrics are the controller's.\n\nThis distinction is written into the data model, not just the policy doc.`,
+        tags: ["#Privacy", "#ASTRA", "#Telemetry", "#Infrastructure"]
+      },
+      {
+        day: "Day 32",
+        hook: "Phase 7 gate: staged multi-node environment survives controller and network failures.",
+        body: `Phase 7 acceptance test: 3-node staged environment. Kill the controller. Partition the network. Verify survival.\n\nResults:\n✓ Nodes continue executing cached-policy tasks offline\n✓ Controller restoration triggers state reconciliation\n✓ Split-brain scenario: high-risk mutations correctly deferred\n✓ Fleet recovery: all nodes resynced within 60 seconds of controller restore\n\nThis is distributed systems engineering applied to AI infrastructure.\n\nPhase 8 next: security hardening and release engineering — where we prepare A.S.T.R.A for the world.`,
+        tags: ["#ASTRA", "#DistributedSystems", "#BuildInPublic", "#Infrastructure"]
+      }
+    ]
+  },
+  {
+    id: 8,
+    name: "Phase 8",
+    label: "Security & release",
+    color: "background: linear-gradient(135deg, #ef4444, #b91c1c); color: #fff;",
+    days: "Days 33–36",
+    posts: [
+      {
+        day: "Day 33",
+        hook: "Phase 8: signed releases, Secure Boot, and preparing A.S.T.R.A for the real world.",
+        body: `The last engineering phase before hardware certification.\n\nPhase 8: security and release engineering.\n\nDeliverables:\n• Secure Boot strategy — only signed A.S.T.R.A images boot\n• Signed APT repository — every package update is cryptographically verified\n• SBOM — software bill of materials for every release\n• Vulnerability scanning in CI — no known CVEs ship\n• Reproducible artifacts — anyone can verify the build\n• Key rotation procedures — documented and tested\n• Incident response runbook\n• Recovery media\n\nSecurity is not a phase you add at the end. But this is where we prove it.`,
+        tags: ["#Security", "#ASTRA", "#SecureBoot", "#OpenSource"]
+      },
+      {
+        day: "Day 34",
+        hook: "SBOM: why every A.S.T.R.A release ships with a complete software bill of materials.",
+        body: `A.S.T.R.A ships an SBOM with every release.\n\nThe SBOM lists every software component in the image: package name, version, license, origin, known vulnerabilities at release time.\n\nWhy publish this?\n\n1. Transparency: users know what they're running\n2. Auditability: security teams can assess exposure\n3. Accountability: we can't hide a dependency we're not proud of\n\nAn AI OS that asks for elevated trust on your machine owes you complete visibility into what it's made of.\n\nSBOM is not compliance overhead. It's a trust artifact.`,
+        tags: ["#SBOM", "#Security", "#ASTRA", "#OpenSource"]
+      },
+      {
+        day: "Day 35",
+        hook: "Disaster recovery rehearsal: we broke A.S.T.R.A on purpose to prove it can be fixed.",
+        body: `Phase 8 gate requires a disaster-recovery rehearsal.\n\nWhat we tested:\n• Corrupt the boot partition → recovery media restores cleanly\n• Rotate all signing keys → existing nodes update, old keys revoked\n• Simulate a supply chain attack (malicious package) → vulnerability scan catches it before release\n• Full node wipe + restore → encrypted state recovers from backup\n\nAll four scenarios: clean recovery, full audit trail, no data loss.\n\nIf you haven't drilled your recovery procedures, you don't have recovery procedures. You have recovery hopes.`,
+        tags: ["#Security", "#ASTRA", "#DisasterRecovery", "#Engineering"]
+      },
+      {
+        day: "Day 36",
+        hook: "Phase 8 cleared. A signed A.S.T.R.A release passes security review.",
+        body: `Phase 8 gate: signed release passes security review and DR rehearsal.\n\n✓ Secure Boot chain intact\n✓ Signed APT repo verified\n✓ SBOM published\n✓ Vulnerability scan: 0 known CVEs at release\n✓ DR rehearsal: 4/4 scenarios recovered cleanly\n\nOne phase left: hardware certification and production rollout.\n\nA.S.T.R.A is no longer just a project. It's a signed, auditable, reproducible AI operating system.\n\nFinal phase next week.`,
+        tags: ["#ASTRA", "#Security", "#BuildInPublic", "#Milestone"]
+      }
+    ]
+  },
+  {
+    id: 9,
+    name: "Phase 9",
+    label: "Certification",
+    color: "background: linear-gradient(135deg, #6366f1, #4338ca); color: #fff;",
+    days: "Days 37–40",
+    posts: [
+      {
+        day: "Day 37",
+        hook: "Phase 9: hardware certification. A.S.T.R.A meets the real world.",
+        body: `The final engineering phase.\n\nPhase 9: hardware certification and production rollout.\n\nWhat certification means:\n• Thermal and stress testing on every supported configuration\n• Performance budgets validated — latency, throughput, memory\n• Supported hardware matrix documented with evidence\n• Staged deployment rings: dev → beta → general availability\n• Support lifecycle published — how long does each release get updates?\n• Update SLAs — how fast do we patch critical vulnerabilities?\n\nCertification isn't a formality. It's evidence capture. The gate only clears when release evidence exists for every certified target configuration.`,
+        tags: ["#ASTRA", "#HardwareCertification", "#Production", "#Engineering"]
+      },
+      {
+        day: "Day 38",
+        hook: "Staged rollout rings: how A.S.T.R.A ships to users without burning down the fleet.",
+        body: `A.S.T.R.A releases in rings.\n\nRing 0 — Dev: internal, automated, catches regressions before humans touch it\nRing 1 — Beta: early adopters, telemetry-heavy, explicit consent to early builds\nRing 2 — GA: general availability, conservative rollout rate, canary metrics watched\n\nEach ring has a promotion gate:\n→ Error rate below threshold\n→ No P0 regressions\n→ Rollback tested and confirmed\n\nIf a release fails at Ring 1, it does not reach Ring 2. Staged rollout is not just a process — it's the last line of defense before a bug reaches production at scale.`,
+        tags: ["#SRE", "#ASTRA", "#Deployment", "#Engineering"]
+      },
+      {
+        day: "Day 39",
+        hook: "Thermal and stress evidence: what we put A.S.T.R.A through before calling it certified.",
+        body: `Before A.S.T.R.A ships on a hardware platform, that platform gets stressed.\n\nOur certification battery:\n• 72-hour continuous agent workload\n• Thermal monitoring — CPU, GPU, storage temps logged every 30s\n• Memory pressure tests — agent runtime under constrained RAM\n• Storage I/O saturation — task store performance under load\n• Power state transitions — suspend, hibernate, resume, all agent state intact\n\nIf any metric exceeds the performance budget, the platform isn't certified.\n\nUsers deserve to know their hardware will run A.S.T.R.A reliably. Evidence, not promises.`,
+        tags: ["#HardwareTesting", "#ASTRA", "#Reliability", "#Engineering"]
+      },
+      {
+        day: "Day 40",
+        hook: "A.S.T.R.A v1.0: from idea to AI OS in 40 days of public engineering.",
+        body: `40 days. 10 phases. One AI operating system.\n\nWhat we built:\n✓ Reproducible Debian baseline\n✓ Bootable image with full provenance\n✓ .deb-packaged runtime with upgrade/rollback\n✓ Authenticated privileged control plane\n✓ Hardware abstraction layer\n✓ Durable agentic runtime with local-first inference\n✓ Spatial interaction with consent-by-design\n✓ Fleet infrastructure with quorum and DR\n✓ Signed, SBOM-documented release\n✓ Certified hardware matrix\n\nThis is what building in public looks like.\n\nA.S.T.R.A is open source. The repo is live. If you want to run your own AI OS — now you can.\n\n→ github.com/ciphernet01/JARVIS-2026\n\nThis is not the end. It's Phase 0 of the next roadmap.`,
+        tags: ["#ASTRA", "#BuildInPublic", "#OpenSource", "#AIEngineering", "#Milestone"]
+      }
+    ]
+  }
+];
+
+let active = 0;
+
+function render() {
+  const nav = document.getElementById('nav');
+  const posts = document.getElementById('posts');
+  
+  // Render navigation
+  nav.innerHTML = phases.map((p, i) => 
+    `<button class="phase-btn ${i === active ? 'active' : ''}" onclick="setPhase(${i})">${p.name}</button>`
+  ).join('');
+  
+  const p = phases[active];
+  
+  // Render content
+  posts.innerHTML = `
+    <div class="phase-block">
+      <div class="phase-header">
+        <span class="phase-badge" style="${p.color}">${p.label}</span>
+        <span class="phase-title">${p.name}: ${p.label}</span>
+        <span class="phase-meta">${p.days}</span>
+      </div>
+      <div class="posts-grid">
+        ${p.posts.map((post, index) => `
+          <div class="post-card" style="animation-delay: ${index * 0.15}s;">
+            <div class="post-day">${post.day}</div>
+            <div class="post-hook">${post.hook}</div>
+            <div class="post-body">${post.body.replace(/\n/g, '<br>')}</div>
+            <div class="post-tags">
+              ${post.tags.map(t => `<span class="tag">${t}</span>`).join('')}
+            </div>
+            <div class="post-actions">
+              <button onclick="copyPost(this, ${JSON.stringify(post.hook + '\\n\\n' + post.body + '\\n\\n' + post.tags.join(' ')).replace(/'/g, "\\'")})">
+                <svg viewBox="0 0 24 24"><path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/></svg>
+                Copy Content
+              </button>
+            </div>
+          </div>
+        `).join('')}
+      </div>
+    </div>
+  `;
+}
+
+function setPhase(i) { 
+  if (active === i) return;
+  active = i; 
+  render(); 
+}
+
+function copyPost(btn, text) {
+  navigator.clipboard.writeText(text).then(() => {
+    const originalText = btn.innerHTML;
+    btn.innerHTML = `<svg viewBox="0 0 24 24"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg> Copied!`;
+    btn.style.color = 'var(--accent)';
+    btn.style.borderColor = 'var(--accent)';
+    setTimeout(() => {
+      btn.innerHTML = originalText;
+      btn.style.color = '';
+      btn.style.borderColor = '';
+    }, 2000);
+  });
+}
+
+// Initial render
+render();
+</script>
+</body>
+</html>
